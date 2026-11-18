@@ -1,0 +1,191 @@
+# Starter goals, tasks and routines for a fresh LIFE OS database.
+# Deliberately contains NO account balances or debt amounts: financial figures live only in
+# your local database (Milestone 2), never in Git.
+# Dates are relative: due_in_days: 0 = the day you run `lifeos seed`.
+
+goals:
+  - code: FIN-G001
+    pillar: FIN
+    title: Financial stabilization
+    description: Establish reliable income, cover essential expenses, maintain a realistic cash-flow plan.
+    progress_evidence: First paycheck deposited; essential bills paid on time for 4 consecutive weeks.
+  - code: FIN-G002
+    pillar: FIN
+    secondary: [REL]
+    title: Personal repayments
+    description: Repay family and former-partner balances according to documented commitments.
+    progress_evidence: Each payment recorded with a confirmation.
+  - code: FIN-G003
+    pillar: FIN
+    title: Tax compliance
+    description: Identify outstanding returns, gather documents, file accurately, set up a payment plan if needed.
+    progress_evidence: IRS account transcript reviewed; each return filed with confirmation.
+  - code: FIN-G004
+    pillar: FIN
+    title: Credit recovery
+    description: Improve credit standing through verified reporting, accurate disputes, and on-time payments.
+    progress_evidence: Reports pulled from all three bureaus; disputes tracked to resolution.
+  - code: FIN-G005
+    pillar: FIN
+    secondary: [REL]
+    title: Christmas fund
+    description: Set a target amount, deadline and funding schedule.
+    progress_evidence: Target written down; contributions recorded.
+  - code: BUS-G001
+    pillar: BUS
+    secondary: [FIN]
+    title: Jet Life expansion
+    description: Acquire up to four suitable jet skis by May 2027 without violating financial or operational controls.
+    target_date: 2027-05-31
+    progress_evidence: Each acquisition passed all purchase gates.
+  - code: EDU-G001
+    pillar: EDU
+    title: Personal University
+    description: Foundational competence in critical thinking, history, business, and personal finance.
+    progress_evidence: Assessments passed; concepts applied to real decisions.
+  - code: ENV-G001
+    pillar: ENV
+    title: Organized living environment
+    description: A clean, functional bedroom and sustainable household routines.
+    progress_evidence: Routine adherence over 4 weeks.
+  - code: REL-G001
+    pillar: REL
+    title: Relationship commitments
+    description: Track and fulfill important personal and family commitments.
+    progress_evidence: Commitments written down and honored.
+
+tasks:
+  - key: rxo_onboarding
+    title: Finish RXO onboarding requirements
+    pillar: BUS
+    priority: 1
+    due_in_days: 0
+    estimated_minutes: 60
+    goal: FIN-G001
+  - key: rxo_pay
+    title: Confirm RXO pay schedule and first pay date (get it in writing)
+    pillar: FIN
+    priority: 1
+    due_in_days: 1
+    estimated_minutes: 15
+    goal: FIN-G001
+    evidence_required: true
+  - key: phone_bill
+    title: Check phone bill due date and amount
+    pillar: FIN
+    priority: 1
+    due_in_days: 1
+    estimated_minutes: 10
+    goal: FIN-G001
+  - key: bosco
+    title: Confirm Don Bosco coaching stipend amount and payment timing
+    pillar: BUS
+    priority: 2
+    due_in_days: 3
+    estimated_minutes: 15
+    goal: FIN-G001
+  - key: irs_account
+    title: Create/log in to IRS online account and pull account transcripts
+    pillar: FIN
+    priority: 2
+    due_in_days: 7
+    estimated_minutes: 45
+    goal: FIN-G003
+  - key: tax_years
+    title: List exactly which tax years are unfiled
+    pillar: FIN
+    priority: 2
+    due_in_days: 10
+    estimated_minutes: 20
+    goal: FIN-G003
+    evidence_required: true
+    depends_on: [irs_account]
+  - key: credit_reports
+    title: Pull free credit reports from all three bureaus
+    pillar: FIN
+    priority: 2
+    due_in_days: 14
+    estimated_minutes: 30
+    goal: FIN-G004
+  - key: commitments
+    title: Write down open personal commitments (who, what, by when)
+    pillar: REL
+    priority: 2
+    due_in_days: 5
+    estimated_minutes: 20
+    goal: REL-G001
+  - key: christmas_target
+    title: Set Christmas fund target and deadline
+    pillar: FIN
+    priority: 2
+    due_in_days: 7
+    estimated_minutes: 15
+    goal: FIN-G005
+  - key: ski_criteria
+    title: Write jet ski acquisition criteria (models, max price, must-haves)
+    pillar: BUS
+    priority: 3
+    due_in_days: 14
+    estimated_minutes: 30
+    goal: BUS-G001
+  - key: first_course
+    title: Choose first Personal University course (Critical Thinking)
+    pillar: EDU
+    priority: 3
+    due_in_days: 7
+    estimated_minutes: 20
+    goal: EDU-G001
+
+recurring:
+  - title: Sleep (protected)
+    pillar: ENV
+    priority: 1
+    frequency: daily
+    estimated_minutes: 420
+    protected: true
+    missed_policy: mark_missed
+  - title: Bedroom reset
+    pillar: ENV
+    priority: 2
+    frequency: daily
+    estimated_minutes: 10
+    missed_policy: mark_missed
+    goal: ENV-G001
+  - title: Review tomorrow's schedule
+    pillar: ENV
+    priority: 2
+    frequency: daily
+    estimated_minutes: 10
+    missed_policy: mark_missed
+  - title: Laundry
+    pillar: ENV
+    priority: 2
+    frequency: weekly
+    weekdays: [SU]
+    estimated_minutes: 90
+    missed_policy: carry_over
+    goal: ENV-G001
+  - title: Clean room
+    pillar: ENV
+    priority: 2
+    frequency: weekly
+    weekdays: [SA]
+    estimated_minutes: 45
+    missed_policy: carry_over
+    goal: ENV-G001
+  - title: Weekly money check-in (balances, bills due next 14 days)
+    pillar: FIN
+    priority: 2
+    frequency: weekly
+    weekdays: [FR]
+    estimated_minutes: 20
+    missed_policy: carry_over
+    goal: FIN-G001
+  - title: Study session - Personal University
+    pillar: EDU
+    priority: 3
+    frequency: weekdays
+    weekdays: [MO, WE, FR]
+    estimated_minutes: 30
+    missed_policy: mark_missed
+    goal: EDU-G001

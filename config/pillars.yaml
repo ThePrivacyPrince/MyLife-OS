@@ -1,0 +1,23 @@
+# The Five Pillars are permanent top-level domains. Subdomains are configurable.
+pillars:
+  - code: BUS
+    name: Business
+    purpose: Develop sustainable income, professional growth, and profitable businesses.
+    subdomains: [Employment and career, Jet Life Jet Skis, Business operations, Business acquisitions,
+                 Entrepreneurship, Coaching, Professional networking, Revenue and profitability]
+  - code: REL
+    name: Relationships
+    purpose: Maintain healthy, dependable, meaningful relationships and fulfill interpersonal commitments.
+    subdomains: [Parenting, Family, Romantic relationships, Friendships, Communication, Personal commitments]
+  - code: ENV
+    name: Environment
+    purpose: Maintain surroundings, routines, and physical conditions that support a stable, healthy life.
+    subdomains: [Household organization, Cleaning, Laundry, Fitness, Sleep, Routines, Digital organization, Health]
+  - code: FIN
+    name: Finances
+    purpose: Restore financial stability, meet obligations, build reserves, and accumulate productive assets.
+    subdomains: [Income, Cash flow, Budgeting, Debt repayment, Tax compliance, Credit recovery, Savings]
+  - code: EDU
+    name: Education
+    purpose: Personal University - develop knowledge, critical thinking, and practical competence.
+    subdomains: [Critical Thinking, History, Business, Personal Finance]

@@ -1,0 +1,17 @@
+# Personal data never goes to Git
+data/
+*.db
+*.db-journal
+*.sqlite
+.env
+exports/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.hypothesis/
+build/
+dist/

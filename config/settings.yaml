@@ -1,0 +1,21 @@
+# Defaults. Override the database location with the LIFEOS_DB environment variable.
+timezone: America/New_York
+database_path: data/lifeos.db
+
+planning:
+  # Realistic minutes per day for P1/P2 work AFTER work shifts, sleep and other protected time.
+  discretionary_minutes_per_day: 180
+  # Used when a task has no estimate. Reported as an assumption, never hidden.
+  default_task_estimate_minutes: 30
+  upcoming_window_days: 7
+  # On first run, how far back recurring tasks are generated (prevents hundreds of fake "missed" items).
+  max_backfill_days: 7
+
+controls:
+  downgrade_window_days: 14
+  downgrade_per_task_threshold: 2   # same task downgraded from P1 this many times -> flag
+  downgrade_total_threshold: 3      # this many P1 downgrades overall in the window -> flag
+  reschedule_threshold: 3           # task rescheduled this many times -> flag
+  adherence_window_days: 14
+  adherence_min_rate: 0.5           # recurring task completed less than this share -> flag
+  adherence_min_samples: 3

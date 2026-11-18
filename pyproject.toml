@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lifeos"
+version = "0.1.0"
+description = "LIFE OS - personal governance, execution and accountability system built on the Five Pillars."
+requires-python = ">=3.12"
+dependencies = [
+    "sqlalchemy>=2.0",
+    "pydantic>=2.6",
+    "pyyaml>=6",
+    "python-dateutil>=2.9",
+    "streamlit>=1.36",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "hypothesis>=6"]
+
+[project.scripts]
+lifeos = "lifeos.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["lifeos*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
