@@ -1,0 +1,319 @@
+"""Planning cascade service: Vision <- Goals <- Objectives <- Key Results <- tasks/routines.
+
+Every change is written to PlanEvent (or TaskEvent for task links). Progress flows up the arrows:
+completed tasks -> key result periods met -> objective hit-rate -> goal -> vision.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from dataclasses import dataclass
+from decimal import Decimal
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from lifeos.config import get_settings
+from lifeos.engines.cascade import (
+    CADENCES, MEASURES, KRStatus, goal_horizon_warnings, kr_status, parse_amount, period_bounds, periods_in,
+    validate_objective_window, vision_horizon_warnings,
+)
+from lifeos.enums import Actor, EventType, TaskStatus as S
+from lifeos.errors import NotFound, ReasonRequired, ValidationError
+from lifeos.models import (
+    Goal, KeyResult, KeyResultCheckIn, Objective, Pillar, PlanEvent, RecurringTemplate, Task, Vision,
+)
+from lifeos.services.tasks import get_task, log
+
+STATUSES = {
+    "vision": ("active", "achieved", "revised", "dropped"),
+    "goal": ("active", "achieved", "paused", "missed", "dropped"),
+    "objective": ("active", "achieved", "missed", "dropped"),
+    "key_result": ("active", "retired"),
+}
+MODELS = {"vision": Vision, "goal": Goal, "objective": Objective, "key_result": KeyResult}
+
+
+# ---------------------------------------------------------------- helpers
+def _plan_log(s: Session, entity: str, code: str, event: str, *, frm=None, to=None, reason=None,
+              actor: Actor = Actor.USER) -> None:
+    s.add(PlanEvent(entity_type=entity, entity_code=code, event_type=event,
+                    from_value=None if frm is None else str(frm), to_value=None if to is None else str(to),
+                    reason=reason, actor=str(actor)))
+
+
+def _clean(title: str) -> str:
+    if not title or not title.strip():
+        raise ValidationError("title cannot be blank")
+    return title.strip()
+
+
+def get_by_code(s: Session, entity: str, code: str):
+    model = MODELS[entity]
+    row = s.scalar(select(model).where(model.code == code))
+    if row is None:
+        raise NotFound(f"{entity.replace('_', ' ').title()} '{code}' not found.")
+    return row
+
+
+def _next_code(s: Session, model, prefix: str) -> str:
+    n = s.scalar(select(func.count()).select_from(model).where(model.code.like(f"{prefix}%"))) or 0
+    while s.scalar(select(model).where(model.code == f"{prefix}{n + 1}")) is not None:
+        n += 1
+    return f"{prefix}{n + 1}"
+
+
+def _next_goal_code(s: Session, pillar: str) -> str:
+    """Goals keep the original FIN-G001 style numbering."""
+    nums = [int(c.rsplit("-G", 1)[1]) for c in s.scalars(select(Goal.code).where(Goal.code.like(f"{pillar}-G%")))
+            if c.rsplit("-G", 1)[1].isdigit()]
+    return f"{pillar}-G{max(nums, default=0) + 1:03d}"
+
+
+# ---------------------------------------------------------------- tier 1: vision
+def create_vision(s: Session, *, pillar: str, title: str, description: str = "", target_year: int | None = None,
+                  today: dt.date | None = None) -> tuple[Vision, list[str]]:
+    if s.get(Pillar, pillar) is None:
+        raise ValidationError(f"Unknown pillar '{pillar}'.")
+    today = today or get_settings().today()
+    c = get_settings().cascade
+    v = Vision(code=_next_code(s, Vision, f"{pillar}-V"), pillar_code=pillar, title=_clean(title),
+               description=description, target_year=target_year)
+    s.add(v)
+    s.flush()
+    _plan_log(s, "vision", v.code, "created", to=v.title)
+    return v, vision_horizon_warnings(today, target_year, c.vision_min_years, c.vision_max_years)
+
+
+# ---------------------------------------------------------------- tier 2: goal
+def create_goal(s: Session, *, pillar: str, title: str, description: str = "", target_date: dt.date | None = None,
+                vision_code: str | None = None, progress_evidence: str = "", secondary: list[str] | None = None,
+                today: dt.date | None = None) -> tuple[Goal, list[str]]:
+    if s.get(Pillar, pillar) is None:
+        raise ValidationError(f"Unknown pillar '{pillar}'.")
+    today = today or get_settings().today()
+    c = get_settings().cascade
+    vision = get_by_code(s, "vision", vision_code) if vision_code else None
+    g = Goal(code=_next_goal_code(s, pillar), pillar_code=pillar, title=_clean(title),
+             description=description, target_date=target_date, progress_evidence=progress_evidence,
+             secondary_pillars=secondary or [], vision_id=vision.id if vision else None)
+    s.add(g)
+    s.flush()
+    _plan_log(s, "goal", g.code, "created", to=g.title)
+    warnings = goal_horizon_warnings(today, target_date, c.goal_min_months, c.goal_max_months)
+    if vision is None:
+        warnings.append("Not connected to a vision yet - which 3-5 year vision does this serve?")
+    return g, warnings
+
+
+def link_goal_to_vision(s: Session, goal_code: str, vision_code: str | None, reason: str = "") -> Goal:
+    goal = get_by_code(s, "goal", goal_code)
+    vision = get_by_code(s, "vision", vision_code) if vision_code else None
+    old = goal.vision.code if goal.vision else None
+    goal.vision_id = vision.id if vision else None
+    s.flush()
+    s.refresh(goal)
+    _plan_log(s, "goal", goal.code, "linked_vision", frm=old, to=vision_code, reason=reason or None)
+    return goal
+
+
+# ---------------------------------------------------------------- tier 3: objective
+def create_objective(s: Session, *, goal_code: str, title: str, start_date: dt.date,
+                     end_date: dt.date | None = None, description: str = "") -> Objective:
+    goal = get_by_code(s, "goal", goal_code)
+    c = get_settings().cascade
+    end_date = end_date or start_date + dt.timedelta(days=c.objective_default_days)
+    validate_objective_window(start_date, end_date, c.objective_max_days)
+    if goal.target_date and start_date > goal.target_date:
+        raise ValidationError("Objective starts after its goal's target date.")
+    o = Objective(code=_next_code(s, Objective, f"{goal.code}-O"), goal_id=goal.id, title=_clean(title),
+                  description=description, start_date=start_date, end_date=end_date)
+    s.add(o)
+    s.flush()
+    _plan_log(s, "objective", o.code, "created", to=f"{o.title} ({start_date} to {end_date})")
+    return o
+
+
+# ---------------------------------------------------------------- tier 4: key result
+def create_key_result(s: Session, *, objective_code: str, title: str, cadence: str, target,
+                      measure: str = "completions", unit: str = "") -> KeyResult:
+    obj = get_by_code(s, "objective", objective_code)
+    if cadence not in CADENCES:
+        raise ValidationError(f"Key results are daily or weekly, not '{cadence}'.")
+    if measure not in MEASURES:
+        raise ValidationError(f"Unknown measure '{measure}'. Use {MEASURES}.")
+    target = parse_amount(target)
+    if target <= 0:
+        raise ValidationError("Target must be greater than zero.")
+    kr = KeyResult(code=_next_code(s, KeyResult, f"{obj.code}-KR"), objective_id=obj.id, title=_clean(title),
+                   cadence=cadence, measure=measure, target=target, unit=unit.strip())
+    s.add(kr)
+    s.flush()
+    _plan_log(s, "key_result", kr.code, "created", to=f"{kr.title}: {target} {unit} per {'day' if cadence == 'daily' else 'week'}")
+    return kr
+
+
+def check_in(s: Session, kr_code: str, day: dt.date, value, note: str = "") -> KeyResultCheckIn:
+    kr = get_by_code(s, "key_result", kr_code)
+    if kr.measure != "manual":
+        raise ValidationError("This key result is measured by completing its linked tasks - just complete them.")
+    ci = KeyResultCheckIn(key_result_id=kr.id, day=day, value=parse_amount(value), note=note.strip())
+    s.add(ci)
+    s.flush()
+    _plan_log(s, "key_result", kr.code, "check_in", to=f"{ci.value} on {day}", reason=note or None)
+    return ci
+
+
+def set_status(s: Session, entity: str, code: str, status: str, reason: str) -> None:
+    if entity not in STATUSES or status not in STATUSES[entity]:
+        raise ValidationError(f"Invalid status '{status}' for {entity}.")
+    if not (reason and reason.strip()):
+        raise ReasonRequired("Closing or changing a plan item needs a reason (what happened?).")
+    row = get_by_code(s, entity, code)
+    old = row.status
+    row.status = status
+    _plan_log(s, entity, code, "status_change", frm=old, to=status, reason=reason.strip())
+    s.flush()
+
+
+# ---------------------------------------------------------------- linking tasks upward
+def link_task(s: Session, task_id: int, kr_code: str | None) -> Task:
+    task = get_task(s, task_id)
+    kr = get_by_code(s, "key_result", kr_code) if kr_code else None
+    old = task.key_result.code if task.key_result else None
+    task.key_result_id = kr.id if kr else None
+    s.flush()
+    s.refresh(task)
+    log(s, task, EventType.EDITED, frm=f"key_result={old}", to=f"key_result={kr_code}")
+    return task
+
+
+def link_template(s: Session, template_id: int, kr_code: str | None) -> RecurringTemplate:
+    tpl = s.get(RecurringTemplate, template_id)
+    if tpl is None:
+        raise NotFound(f"Recurring template {template_id} not found.")
+    kr = get_by_code(s, "key_result", kr_code) if kr_code else None
+    tpl.key_result_id = kr.id if kr else None
+    # Open occurrences follow the routine; completed history keeps the link it was completed under.
+    for occ in tpl.occurrences:
+        if occ.status in (S.PENDING, S.IN_PROGRESS, S.BLOCKED, S.WAITING, S.DEFERRED, S.MISSED):
+            occ.key_result_id = tpl.key_result_id
+    s.flush()
+    _plan_log(s, "key_result", kr_code or "-", "linked_routine", to=f"template #{tpl.id} {tpl.title}")
+    return tpl
+
+
+@dataclass(frozen=True)
+class Link:
+    tier: str
+    code: str
+    title: str
+
+
+def lineage(task: Task) -> list[Link]:
+    """The upward chain a task serves: key result -> objective -> goal -> vision."""
+    chain: list[Link] = []
+    kr = task.key_result
+    if kr:
+        chain.append(Link("key_result", kr.code, kr.title))
+        obj = kr.objective
+        chain.append(Link("objective", obj.code, obj.title))
+        goal = obj.goal
+    else:
+        goal = task.goal
+    if goal:
+        chain.append(Link("goal", goal.code, goal.title))
+        if goal.vision:
+            chain.append(Link("vision", goal.vision.code, goal.vision.title))
+    return chain
+
+
+# ---------------------------------------------------------------- measuring (the arrows)
+def kr_actual(s: Session, kr: KeyResult, lo: dt.date, hi: dt.date) -> Decimal:
+    settings = get_settings()
+    if kr.measure == "manual":
+        return sum((c.value for c in kr.checkins if lo <= c.day <= hi), Decimal(0))
+    done = s.scalars(select(Task).where(Task.key_result_id == kr.id, Task.status == S.COMPLETED))
+    return Decimal(sum(1 for t in done if t.completed_at and lo <= settings.local_date(t.completed_at) <= hi))
+
+
+def kr_progress(s: Session, kr: KeyResult, day: dt.date) -> tuple[tuple[dt.date, dt.date], KRStatus]:
+    period = period_bounds(kr.cadence, day)
+    return period, kr_status(kr_actual(s, kr, *period), kr.target, period, day)
+
+
+@dataclass(frozen=True)
+class Health:
+    met: int
+    total: int  # completed periods so far
+
+    @property
+    def rate(self) -> float | None:
+        return None if self.total == 0 else self.met / self.total
+
+
+def objective_health(s: Session, obj: Objective, day: dt.date) -> Health:
+    """Share of finished key-result periods (inside the objective window) whose target was met."""
+    met = total = 0
+    last = min(day - dt.timedelta(days=1), obj.end_date)
+    for kr in obj.key_results:
+        if kr.status != "active":
+            continue
+        for lo, hi in periods_in(kr.cadence, obj.start_date, last) if last >= obj.start_date else []:
+            if hi > last:  # period not finished yet
+                continue
+            total += 1
+            met += kr_actual(s, kr, lo, hi) >= kr.target
+    return Health(met, total)
+
+
+def active_objectives(goal: Goal, day: dt.date) -> list[Objective]:
+    return [o for o in goal.objectives if o.status == "active" and o.start_date <= day <= o.end_date]
+
+
+def active_key_results(s: Session, day: dt.date) -> list[KeyResult]:
+    rows = s.scalars(select(KeyResult).join(Objective).where(
+        KeyResult.status == "active", Objective.status == "active",
+        Objective.start_date <= day, Objective.end_date >= day).order_by(KeyResult.code))
+    return list(rows)
+
+
+# ---------------------------------------------------------------- gaps in the cascade
+@dataclass(frozen=True)
+class Gap:
+    tier: str
+    code: str | None
+    message: str
+
+
+def cascade_gaps(s: Session, day: dt.date) -> list[Gap]:
+    gaps: list[Gap] = []
+    visions = list(s.scalars(select(Vision).where(Vision.status == "active")))
+    goals = list(s.scalars(select(Goal).where(Goal.status == "active")))
+    for p in s.scalars(select(Pillar).order_by(Pillar.sort_order)):
+        if not any(v.pillar_code == p.code for v in visions):
+            gaps.append(Gap("vision", None, f"{p.name}: no 3-5 year vision yet. Where do you want to be?"))
+    for v in visions:
+        if not any(g.vision_id == v.id for g in goals):
+            gaps.append(Gap("vision", v.code, f"Vision '{v.title}' has no 6-12 month goal moving it forward."))
+    for g in goals:
+        if g.vision_id is None:
+            gaps.append(Gap("goal", g.code, f"Goal {g.code} '{g.title}' isn't connected to a vision."))
+        if not active_objectives(g, day):
+            gaps.append(Gap("goal", g.code, f"Goal {g.code} '{g.title}' has no objective for this quarter."))
+    for o in s.scalars(select(Objective).where(Objective.status == "active")):
+        if o.end_date < day:
+            gaps.append(Gap("objective", o.code, f"Objective {o.code} ended {o.end_date} - close it out: "
+                                                 "achieved, missed, or dropped?"))
+        elif not any(kr.status == "active" for kr in o.key_results):
+            gaps.append(Gap("objective", o.code, f"Objective '{o.title}' has no daily/weekly key results."))
+    for kr in active_key_results(s, day):
+        if kr.measure == "completions" and not kr.tasks and not kr.templates:
+            gaps.append(Gap("key_result", kr.code, f"Key result '{kr.title}' has no task or routine driving it."))
+    return gaps
+
+
+def unlinked_open_tasks(s: Session) -> list[Task]:
+    rows = s.scalars(select(Task).where(Task.key_result_id.is_(None), Task.protected.is_(False),
+                                        Task.status.in_([S.PENDING, S.IN_PROGRESS])))
+    return list(rows)

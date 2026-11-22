@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -24,9 +24,30 @@ def make_engine(url: str | None = None) -> Engine:
     return engine
 
 
+# Columns added after Milestone 1 shipped. Existing databases get them added in place (nullable, so no
+# existing row changes). Full Alembic migrations arrive with Milestone 2.
+ADDITIVE_COLUMNS = [
+    ("goals", "vision_id", "INTEGER REFERENCES visions(id)"),
+    ("tasks", "key_result_id", "INTEGER REFERENCES key_results(id)"),
+    ("recurring_templates", "key_result_id", "INTEGER REFERENCES key_results(id)"),
+]
+
+
+def _add_missing_columns(engine: Engine) -> list[str]:
+    added = []
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, column, ddl in ADDITIVE_COLUMNS:
+            if column not in {c["name"] for c in insp.get_columns(table)}:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+                added.append(f"{table}.{column}")
+    return added
+
+
 def init_db(engine: Engine) -> None:
-    """Create tables (idempotent) and sync the Five Pillars from config."""
+    """Create tables (idempotent), upgrade older databases, and sync the Five Pillars from config."""
     Base.metadata.create_all(engine)
+    _add_missing_columns(engine)
     with Session(engine) as s:
         for i, p in enumerate(load_pillars()):
             row = s.get(Pillar, p["code"]) or Pillar(code=p["code"])

@@ -32,11 +32,21 @@ class ControlSettings(BaseModel):
     adherence_min_samples: int = 3
 
 
+class CascadeSettings(BaseModel):
+    vision_min_years: int = 3
+    vision_max_years: int = 5
+    goal_min_months: int = 6
+    goal_max_months: int = 12
+    objective_default_days: int = 91
+    objective_max_days: int = 100
+
+
 class Settings(BaseModel):
     timezone: str = "America/New_York"
     database_path: str = "data/lifeos.db"
     planning: PlanningSettings = PlanningSettings()
     controls: ControlSettings = ControlSettings()
+    cascade: CascadeSettings = CascadeSettings()
 
     @property
     def tz(self) -> ZoneInfo:

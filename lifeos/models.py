@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import datetime as dt
 
+from decimal import Decimal
+
 from sqlalchemy import (
     JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, CheckConstraint,
 )
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from lifeos.config import utcnow
@@ -17,6 +20,19 @@ from lifeos.config import utcnow
 
 class Base(DeclarativeBase):
     pass
+
+
+class DecimalText(TypeDecorator):
+    """Exact decimals stored as text. SQLite has no decimal type, and floats are never allowed for amounts."""
+
+    impl = String(40)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return None if value is None else str(Decimal(value))
+
+    def process_result_value(self, value, dialect):
+        return None if value is None else Decimal(value)
 
 
 class Pillar(Base):
@@ -46,7 +62,96 @@ class Goal(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
+    vision_id: Mapped[int | None] = mapped_column(ForeignKey("visions.id"))
+
     tasks: Mapped[list["Task"]] = relationship(back_populates="goal")
+    vision: Mapped["Vision | None"] = relationship(back_populates="goals")
+    objectives: Mapped[list["Objective"]] = relationship(back_populates="goal", order_by="Objective.start_date")
+
+
+class Vision(Base):
+    """Tier 1 - where I want to be in 3-5 years."""
+
+    __tablename__ = "visions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True)  # e.g. FIN-V1
+    pillar_code: Mapped[str] = mapped_column(ForeignKey("pillars.code"))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    target_year: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    goals: Mapped[list[Goal]] = relationship(back_populates="vision", order_by="Goal.code")
+
+
+class Objective(Base):
+    """Tier 3 - what this quarter (about 3 months) must deliver toward a goal."""
+
+    __tablename__ = "objectives"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(48), unique=True)  # e.g. FIN-G003-O1
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id"))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    start_date: Mapped[dt.date] = mapped_column(Date)
+    end_date: Mapped[dt.date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active|achieved|missed|dropped
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    goal: Mapped[Goal] = relationship(back_populates="objectives")
+    key_results: Mapped[list["KeyResult"]] = relationship(back_populates="objective", order_by="KeyResult.id")
+
+
+class KeyResult(Base):
+    """Tier 4 - a measurable daily/weekly result that drives an objective."""
+
+    __tablename__ = "key_results"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(56), unique=True)  # e.g. FIN-G003-O1-KR1
+    objective_id: Mapped[int] = mapped_column(ForeignKey("objectives.id"))
+    title: Mapped[str] = mapped_column(String(200))
+    cadence: Mapped[str] = mapped_column(String(8))           # daily | weekly
+    measure: Mapped[str] = mapped_column(String(16))          # completions (of linked tasks) | manual (check-ins)
+    target: Mapped[Decimal] = mapped_column(DecimalText)      # per period
+    unit: Mapped[str] = mapped_column(String(32), default="")
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | retired
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    objective: Mapped[Objective] = relationship(back_populates="key_results")
+    tasks: Mapped[list["Task"]] = relationship(back_populates="key_result")
+    templates: Mapped[list["RecurringTemplate"]] = relationship(back_populates="key_result")
+    checkins: Mapped[list["KeyResultCheckIn"]] = relationship(back_populates="key_result",
+                                                              order_by="KeyResultCheckIn.day")
+
+
+class KeyResultCheckIn(Base):
+    __tablename__ = "key_result_checkins"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key_result_id: Mapped[int] = mapped_column(ForeignKey("key_results.id"))
+    day: Mapped[dt.date] = mapped_column(Date)
+    value: Mapped[Decimal] = mapped_column(DecimalText)
+    note: Mapped[str] = mapped_column(Text, default="")
+    at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    key_result: Mapped[KeyResult] = relationship(back_populates="checkins")
+
+
+class PlanEvent(Base):
+    """Append-only audit trail for the planning cascade (visions, goals, objectives, key results)."""
+
+    __tablename__ = "plan_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entity_type: Mapped[str] = mapped_column(String(16))
+    entity_code: Mapped[str] = mapped_column(String(56))
+    event_type: Mapped[str] = mapped_column(String(32))
+    from_value: Mapped[str | None] = mapped_column(String(200))
+    to_value: Mapped[str | None] = mapped_column(String(200))
+    reason: Mapped[str | None] = mapped_column(Text)
+    actor: Mapped[str] = mapped_column(String(32), default="user")
+    at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class RecurringTemplate(Base):
@@ -70,9 +175,11 @@ class RecurringTemplate(Base):
     evidence_required: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     generated_through: Mapped[dt.date | None] = mapped_column(Date)
+    key_result_id: Mapped[int | None] = mapped_column(ForeignKey("key_results.id"))
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
     occurrences: Mapped[list["Task"]] = relationship(back_populates="template")
+    key_result: Mapped[KeyResult | None] = relationship(back_populates="templates")
 
     __table_args__ = (CheckConstraint("priority BETWEEN 1 AND 3", name="ck_template_priority"),)
 
@@ -101,8 +208,10 @@ class Task(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    key_result_id: Mapped[int | None] = mapped_column(ForeignKey("key_results.id"))
 
     goal: Mapped[Goal | None] = relationship(back_populates="tasks")
+    key_result: Mapped[KeyResult | None] = relationship(back_populates="tasks")
     template: Mapped[RecurringTemplate | None] = relationship(back_populates="occurrences")
     events: Mapped[list["TaskEvent"]] = relationship(back_populates="task", order_by="TaskEvent.id")
     evidence: Mapped[list["Evidence"]] = relationship(back_populates="task", order_by="Evidence.id")

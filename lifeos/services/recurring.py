@@ -12,7 +12,7 @@ from lifeos.engines.recurrence import build_rule, occurrence_dates, validate_rul
 from lifeos.enums import Actor, EventType, MissedPolicy, Priority, TaskKind, TaskStatus as S
 from lifeos.errors import NotFound, ValidationError
 from lifeos.models import Pillar, RecurringTemplate, Task
-from lifeos.services.tasks import _goal_id, log, transition
+from lifeos.services.tasks import _goal_id, _key_result_id, log, transition
 
 
 def create_template(
@@ -33,6 +33,7 @@ def create_template(
     evidence_required: bool = False,
     description: str = "",
     goal_code: str | None = None,
+    key_result_code: str | None = None,
 ) -> RecurringTemplate:
     if not title or not title.strip():
         raise ValidationError("title cannot be blank")
@@ -48,6 +49,7 @@ def create_template(
         rule=rule, frequency_label=label, start_date=start_date, end_date=end_date,
         estimated_minutes=estimated_minutes, missed_policy=str(MissedPolicy(missed_policy)),
         protected=protected, evidence_required=evidence_required, goal_id=_goal_id(s, goal_code),
+        key_result_id=_key_result_id(s, key_result_code),
     )
     s.add(tpl)
     s.flush()
@@ -95,7 +97,7 @@ def generate_occurrences(s: Session, through: dt.date) -> list[Task]:
                 priority=tpl.priority, kind=TaskKind.OCCURRENCE, template_id=tpl.id, occurrence_date=day,
                 scheduled_date=day, due_date=day, estimated_minutes=tpl.estimated_minutes,
                 goal_id=tpl.goal_id, evidence_required=tpl.evidence_required, protected=tpl.protected,
-                status=S.PENDING,
+                status=S.PENDING, key_result_id=tpl.key_result_id,
             )
             s.add(occ)
             s.flush()

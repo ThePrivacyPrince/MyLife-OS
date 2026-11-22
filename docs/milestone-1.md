@@ -144,3 +144,50 @@ Sidebar: view picker, planning date, pillar filter, one-time/recurring filter.
 2. A "Pull into today" button for future tasks.
 3. Protected work-shift template once the RXO schedule is known (it'll make capacity math honest).
 4. Decision Journal (small, compounds over time).
+
+---
+
+# Milestone 1.1 — The planning cascade
+
+Added at the owner's request: a 3-5 yr / 6-12 mo / 3 mo / daily-weekly planning ladder.
+
+```
+3-5 years      VISION        where I want to be                   FIN-V1
+    ↑
+6-12 months    GOALS         what must be true within a year       FIN-G003
+    ↑
+3 months       OBJECTIVES    what this quarter must deliver        FIN-G003-O1
+    ↑
+daily/weekly   KEY RESULTS   measurable things I do each day/week  FIN-G003-O1-KR1
+    ↑
+               tasks & routines linked to a key result
+```
+
+All arrows point up. The hierarchy is now **Pillar → Vision → Goal → Objective → Key result → Task/Routine**.
+
+**Rules**
+- Horizon checks come from `config/settings.yaml → cascade`. A vision outside 3-5 years, or a goal outside 6-12 months,
+  saves with a gentle warning. An objective longer than 100 days is rejected, because that's a goal.
+- Key results are **daily or weekly**, measured by either:
+  - *completions*: linked tasks/routines completed in the period, or
+  - *manual*: check-in amounts, exact decimals stored as text (never floats).
+- Pace only counts **finished** days, so Monday morning is never "behind".
+- Progress flows up: completed tasks → KR periods met → objective hit-rate (finished periods only) → goal → vision.
+- Linking a routine moves its open and future occurrences; completed history keeps the link it was done under.
+- Every plan change is audited in `plan_events`. Closing an objective, goal or vision requires a reason.
+- **Gaps** are flagged, never auto-filled:
+  - a pillar with no vision, or a vision with no goals
+  - a goal with no vision, or no objective this quarter
+  - an objective with no key results, or one past its end date and still open
+  - a key result nothing drives
+- Nothing in the tiers is invented: visions and objectives are written by you.
+
+**Upgrade:** existing databases gain the new nullable columns in place on startup (`lifeos/db.py`, test `UPG-01`).
+
+**UI:**
+- **Plan** page (replaces Goals): the ladder, a gap summary, and each pillar's chain with live KR progress bars, plus forms for every tier, check-ins, status changes and goal→vision links.
+- **Today:** this period's key results and a "↑ serves: …" line on every linked task.
+- **Add:** both forms can link a new task or routine to a key result.
+- **Tasks:** a "Link ↑" tab. **Recurring:** a link option on each routine.
+
+Tests: `tests/unit/test_cascade.py` (CAS-01..20), `tests/integration/test_upgrade.py`, `test_int07` (builds a full chain through the UI).

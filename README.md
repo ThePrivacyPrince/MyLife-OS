@@ -18,6 +18,8 @@ Business · Relationships · Environment · Finances · Education.
 - Dependencies (with cycle protection), required evidence, and a full audit history for every task.
 - A daily plan with overdue items (never silently dropped), capacity/overcommitment warnings and follow-ups.
 - An end-of-day review and constructive pattern detection: repeated rescheduling, weak routine adherence, P1 downgrades.
+- **Planning cascade:** 3-5 yr Vision ← 6-12 mo Goals ← 3 mo Objectives ← daily/weekly Key Results ← tasks.
+  Progress flows up the chain, and gaps in it are flagged.
 
 ## Quick start
 

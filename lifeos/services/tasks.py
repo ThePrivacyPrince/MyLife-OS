@@ -32,6 +32,7 @@ class TaskCreate(BaseModel):
     evidence_required: bool = False
     protected: bool = False
     depends_on: list[int] = Field(default_factory=list)
+    key_result_code: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -70,6 +71,16 @@ def log(s: Session, task: Task, event: EventType, *, frm=None, to=None, reason=N
 def _require_pillar(s: Session, code: str) -> None:
     if s.get(Pillar, code) is None:
         raise ValidationError(f"Unknown pillar '{code}'.")
+
+
+def _key_result_id(s: Session, code: str | None) -> int | None:
+    if not code:
+        return None
+    from lifeos.models import KeyResult
+    kr = s.scalar(select(KeyResult).where(KeyResult.code == code))
+    if kr is None:
+        raise ValidationError(f"Unknown key result '{code}'.")
+    return kr.id
 
 
 def _goal_id(s: Session, code: str | None) -> int | None:
@@ -111,6 +122,7 @@ def create_task(s: Session, *, actor: Actor = Actor.USER, **fields) -> Task:
         kind=TaskKind.ONE_TIME, scheduled_date=data.scheduled_date, due_date=data.due_date,
         estimated_minutes=data.estimated_minutes, goal_id=_goal_id(s, data.goal_code),
         evidence_required=data.evidence_required, protected=data.protected, status=S.PENDING,
+        key_result_id=_key_result_id(s, data.key_result_code),
     )
     s.add(task)
     s.flush()

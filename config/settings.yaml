@@ -19,3 +19,12 @@ controls:
   adherence_window_days: 14
   adherence_min_rate: 0.5           # recurring task completed less than this share -> flag
   adherence_min_samples: 3
+
+# The planning cascade (whiteboard):  3-5 yr Vision <- 6-12 mo Goals <- 3 mo Objectives <- daily/weekly Key Results
+cascade:
+  vision_min_years: 3
+  vision_max_years: 5
+  goal_min_months: 6
+  goal_max_months: 12
+  objective_default_days: 91   # one quarter
+  objective_max_days: 100      # an "objective" longer than ~3 months is really a goal
