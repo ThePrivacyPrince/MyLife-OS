@@ -28,3 +28,5 @@ cascade:
   goal_max_months: 12
   objective_default_days: 91   # one quarter
   objective_max_days: 100      # an "objective" longer than ~3 months is really a goal
+  due_soon_days: 14            # countdowns turn amber inside this window
+  next_objective_lead_days: 14 # start nagging to plan next quarter this many days before an objective ends

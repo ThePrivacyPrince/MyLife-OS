@@ -5,7 +5,7 @@ from streamlit.testing.v1 import AppTest
 from lifeos.config import REPO_ROOT
 
 APP = str(REPO_ROOT / "lifeos" / "dashboard" / "app.py")
-PAGES = ["Today", "Plan", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Plan", "Timeline", "Add", "Recurring", "All tasks", "Review"]
 
 
 @pytest.fixture
@@ -60,3 +60,21 @@ def test_int07_build_the_whole_chain_from_the_plan_page(seeded_db):
     assert not at.exception
     assert any("Tax paperwork sessions" in str(p.value) or "Tax paperwork sessions" in (p.proto.text or "")
                for p in at.get("progress"))
+
+
+def test_int08_deadline_form_and_timeline(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Plan").run()
+    at.selectbox(key="d_t").set_value("goal")
+    at.text_input(key="d_c").set_value("FIN-G003")
+    [b for b in at.button if b.label == "Save deadline"][0].click().run()
+    assert any("Deadline saved" in x.value for x in at.success), [e.value for e in at.error]
+    # moving it again without a reason is refused, visibly
+    at.selectbox(key="d_t").set_value("goal")
+    at.text_input(key="d_c").set_value("FIN-G003")
+    [b for b in at.button if b.label == "Save deadline"][0].click().run()
+    assert any("needs a reason" in e.value for e in at.error)
+    at.sidebar.radio[0].set_value("Timeline").run()
+    assert not at.exception
+    assert any("Tax compliance" in m.value for m in at.markdown)

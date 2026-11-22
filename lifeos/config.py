@@ -39,6 +39,8 @@ class CascadeSettings(BaseModel):
     goal_max_months: int = 12
     objective_default_days: int = 91
     objective_max_days: int = 100
+    due_soon_days: int = 14
+    next_objective_lead_days: int = 14
 
 
 class Settings(BaseModel):

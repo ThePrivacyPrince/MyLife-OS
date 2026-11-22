@@ -89,7 +89,7 @@ def test_cas07_goal_numbering_continues_existing_codes(s, today):
 
 def test_cas08_objective_window_is_about_three_months(s, stack):
     _, goal, obj, _ = stack
-    assert (obj.end_date - obj.start_date).days == 91
+    assert (obj.end_date - obj.start_date).days + 1 == 91  # 91 days inclusive
     with pytest.raises(ValidationError, match="goal level"):
         C.create_objective(s, goal_code=goal.code, title="Too long", start_date=MON,
                            end_date=MON + dt.timedelta(days=200))

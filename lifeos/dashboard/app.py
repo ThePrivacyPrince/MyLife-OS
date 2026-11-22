@@ -70,7 +70,7 @@ def val(key: str, default=None):
 
 # ------------------------------------------------------------------ sidebar
 st.sidebar.title("◎ LIFE OS")
-page = st.sidebar.radio("View", ["Today", "Plan", "Add", "Recurring", "All tasks", "Review"],
+page = st.sidebar.radio("View", ["Today", "Plan", "Timeline", "Add", "Recurring", "All tasks", "Review"],
                         label_visibility="collapsed")
 day: dt.date = st.sidebar.date_input("Planning date", value=get_settings().today())
 pillar_filter = st.sidebar.multiselect("Pillars", list(ICON), format_func=lambda c: f"{ICON[c]} {c}")
@@ -226,6 +226,10 @@ def page_today() -> None:
         st.info(f.message, icon="🔍")
     if plan.protected:
         st.caption("🛡️ Protected today: " + " · ".join(p.task.title for p in plan.protected))
+    road = [d for d in C.upcoming_deadlines(s, day) if d.tier != "vision"][:3]
+    if road:
+        st.caption("⏳ Countdown: " + " · ".join(
+            f"{CD_ICON[d.countdown.state]} {d.title} - {d.countdown.label.split(' (')[0]}" for d in road))
     krs = C.active_key_results(s, day)
     if krs:
         with st.expander(f"🎯 Key results this period ({len(krs)})", expanded=True):
@@ -401,6 +405,49 @@ def page_all() -> None:
 STATUS_ICON = {"met": "✅", "on_track": "🟢", "behind": "🟠", "missed": "🔴", "no_target": "⚪"}
 
 
+CD_ICON = {"on_clock": "⏳", "due_soon": "🟠", "due_today": "🔴", "overdue": "🔴", "not_started": "🗓️",
+           "no_deadline": "⚪"}
+SLOT_ICON = {"achieved": "✅", "missed": "❌", "active": "▶️", "planned": "🗓️", "unplanned": "⬜", "gap": "⚠️"}
+SLOT_TEXT = {"achieved": "achieved", "missed": "missed", "active": "now", "planned": "planned",
+             "unplanned": "not planned yet", "gap": "nothing was planned"}
+
+
+def countdown_bar(entity: str, row) -> None:
+    """Deadline + countdown + how much of the time window is already used."""
+    cd = C.countdown_for(entity, row, day)
+    moves = C.deadline_moves(s, entity, row.code)
+    text = f"{CD_ICON[cd.state]} {cd.label}"
+    if cd.deadline:
+        text += f" · deadline {cd.deadline:%b %d, %Y} · {cd.elapsed_fraction:.0%} of the time used"
+    if moves:
+        text += f" · moved {moves}×"
+    if cd.deadline:
+        st.progress(cd.elapsed_fraction, text=text)
+    else:
+        st.caption(text + " - set one under **Change deadline**.")
+
+
+def prefill_objective(goal_code: str, start: dt.date, end: dt.date | None = None) -> None:
+    SS["o_g"], SS["o_s"], SS["o_e"] = goal_code, start, end
+    flash("info", f"Objective form below is pre-filled for {goal_code} starting {start:%b %d}. Give it a title.")
+
+
+def goal_timeline_row(g: Goal) -> None:
+    slots = C.goal_timeline(g, day)
+    if not slots:
+        return
+    cols = st.columns(len(slots))
+    first_open = next((sl for sl in slots if sl.state == "unplanned"), None)
+    for i, (col, sl) in enumerate(zip(cols, slots), 1):
+        with col:
+            mark = " ◀ now" if sl.current else ""
+            st.caption(f"**Q{i}**{mark}  \n{sl.start:%b %d} - {sl.end:%b %d '%y}  \n"
+                       f"{SLOT_ICON[sl.state]} {SLOT_TEXT[sl.state]}")
+            if sl is first_open:
+                st.button("Plan it", key=f"pq{g.code}{i}", on_click=prefill_objective,
+                          args=(g.code, max(sl.start, day), sl.end))
+
+
 def kr_row(kr: KeyResult) -> None:
     (lo, hi), status = C.kr_progress(s, kr, day)
     when = "today" if kr.cadence == "daily" else f"week of {lo:%b %d}"
@@ -453,6 +500,7 @@ def page_plan() -> None:
                             + ("" if v.status == "active" else f" · _{v.status}_"))
                 if v.description:
                     st.caption(v.description)
+                countdown_bar("vision", v)
                 for g in v.goals:
                     goal_block(g)
                 if not v.goals:
@@ -539,6 +587,16 @@ def page_plan() -> None:
         st.text_input("What happened? (required)", key="x_r")
         st.form_submit_button("Update status", on_click=act, args=(lambda s: C.set_status(
             s, val("x_t"), val("x_c", "").strip(), val("x_s", "").strip(), val("x_r", "")), "Status updated"))
+    with ts, st.form("f_deadline", clear_on_submit=True):
+        st.caption("Change deadline - setting the first one is free; moving one needs a reason and is counted.")
+        c = st.columns(3)
+        c[0].selectbox("Tier", ["goal", "objective", "vision"], key="d_t", format_func=lambda x: TIER_LABELS[x])
+        c[1].text_input("Code", key="d_c", placeholder="e.g. BUS-G001")
+        c[2].date_input("New deadline (visions use the year)", value=day + dt.timedelta(days=180), key="d_d")
+        st.text_input("Why is it moving?", key="d_r")
+        st.form_submit_button("Save deadline", on_click=act, args=(lambda s: C.change_deadline(
+            s, val("d_t"), val("d_c", "").strip(),
+            val("d_d").year if val("d_t") == "vision" else val("d_d"), val("d_r", "")), "Deadline saved"))
     with ts, st.form("f_relink", clear_on_submit=True):
         st.caption("Connect a goal to a vision ↑")
         c = st.columns(2)
@@ -549,12 +607,47 @@ def page_plan() -> None:
             s, val("r_g"), val("r_v")), "Goal connected"))
 
 
+def page_timeline() -> None:
+    st.title("Timeline")
+    st.caption("Every commitment with a date, soonest first. Deadlines only move with a reason, so nothing "
+               "quietly resets.")
+    road = [d for d in C.upcoming_deadlines(s, day)
+            if not pillar_filter or d.code.split("-")[0] in pillar_filter]
+    if not road:
+        st.info("No deadlines yet. Add a vision, goal or objective on the **Plan** page - each one starts a countdown.")
+        return
+    overdue = [d for d in road if d.countdown.state == "overdue"]
+    if overdue:
+        st.error(f"{len(overdue)} commitment(s) past their deadline - close each out (achieved / missed) or move "
+                 "the deadline with a reason on the Plan page.")
+    c = st.columns(3)
+    c[0].metric("Next 30 days", sum(1 for d in road if 0 <= (d.date - day).days <= 30))
+    c[1].metric("Next 12 months", sum(1 for d in road if 0 <= (d.date - day).days <= 365))
+    c[2].metric("Deadlines moved", sum(d.moves for d in road))
+    tier_icon = {"vision": "🔭", "goal": "🎯", "objective": "📅"}
+    current = None
+    for d in road:
+        bucket = "Past deadline" if d.countdown.state == "overdue" else f"{d.date:%B %Y}"
+        if bucket != current:
+            st.subheader(bucket)
+            current = bucket
+        with st.container(border=True):
+            cols = st.columns([5, 2])
+            cols[0].markdown(f"{tier_icon[d.tier]} **{d.title}**")
+            cols[0].caption(f"{TIER_LABELS[d.tier]} · {d.code} · due {d.date:%a %b %d, %Y}"
+                            + (f" · moved {d.moves}×" if d.moves else ""))
+            cols[1].markdown(f"{CD_ICON[d.countdown.state]} **{d.countdown.label.split(' (')[0]}**")
+            st.progress(d.countdown.elapsed_fraction, text=f"{d.countdown.elapsed_fraction:.0%} of the time used")
+
+
 def goal_block(g: Goal) -> None:
     linked = [t for t in g.tasks if t.status != S.CANCELLED]
     tdate = f" · by {g.target_date:%b %Y}" if g.target_date else ""
     st.markdown(f"🎯 **{g.code} · {g.title}**{tdate}" + ("" if g.status == "active" else f" · _{g.status}_"))
     st.caption(f"Evidence of progress: {g.progress_evidence or ':red[not defined]'} · "
                f"Linked tasks done: {sum(t.status == S.COMPLETED for t in linked)}/{len(linked)} (activity, not achievement)")
+    countdown_bar("goal", g)
+    goal_timeline_row(g)
     for o in g.objectives:
         if o.status != "active" and o.end_date < day - dt.timedelta(days=120):
             continue
@@ -562,6 +655,17 @@ def goal_block(g: Goal) -> None:
         rate = "no finished periods yet" if h.rate is None else f"{h.rate:.0%} of KR periods met ({h.met}/{h.total})"
         st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;↳ 📅 **{o.title}** · {o.start_date:%b %d} - {o.end_date:%b %d}"
                     f" · {o.status} · {rate}")
+        if o.status == "active":
+            cols = st.columns([0.06, 0.94])
+            with cols[1]:
+                countdown_bar("objective", o)
+                left = (o.end_date - day).days
+                has_next = any(n.start_date > o.end_date - dt.timedelta(days=7) and n.id != o.id
+                               and n.status != "dropped" for n in g.objectives)
+                if 0 <= left <= get_settings().cascade.next_objective_lead_days and not has_next and \
+                        (g.target_date is None or o.end_date < g.target_date):
+                    st.button("Plan next quarter →", key=f"nq{o.code}", on_click=prefill_objective,
+                              args=(g.code, o.end_date + dt.timedelta(days=1)))
         for kr in o.key_results:
             if kr.status == "active":
                 cols = st.columns([0.06, 0.94])
@@ -609,6 +713,6 @@ def page_review() -> None:
         lambda s: save_review(s, day, val("rv_note", "")), "Review saved"))
 
 
-{"Today": page_today, "Plan": page_plan, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
+{"Today": page_today, "Plan": page_plan, "Timeline": page_timeline, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
  "Review": page_review}[page]()
 s.close()

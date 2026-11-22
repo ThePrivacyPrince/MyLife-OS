@@ -20,6 +20,8 @@ Business · Relationships · Environment · Finances · Education.
 - An end-of-day review and constructive pattern detection: repeated rescheduling, weak routine adherence, P1 downgrades.
 - **Planning cascade:** 3-5 yr Vision ← 6-12 mo Goals ← 3 mo Objectives ← daily/weekly Key Results ← tasks.
   Progress flows up the chain, and gaps in it are flagged.
+- **Countdowns and timelines:** every vision, goal and objective has a deadline that counts down. Deadlines only
+  move with a recorded reason, and each goal shows its quarter-by-quarter runway.
 
 ## Quick start
 

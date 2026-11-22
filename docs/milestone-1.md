@@ -191,3 +191,25 @@ All arrows point up. The hierarchy is now **Pillar → Vision → Goal → Objec
 - **Tasks:** a "Link ↑" tab. **Recurring:** a link option on each routine.
 
 Tests: `tests/unit/test_cascade.py` (CAS-01..20), `tests/integration/test_upgrade.py`, `test_int07` (builds a full chain through the UI).
+
+---
+
+# Milestone 1.2 — Countdowns and timelines ("so I'm not starting over")
+
+- **Every tier has a deadline.**
+  - A vision needs a target year, which counts down to Dec 31 of that year.
+  - A goal needs a target date; older goals without one are flagged until you set it.
+  - An objective has its end date: 91 days inclusive by default, about 100 days at most.
+- **Countdowns** (`lifeos/engines/timeline.py`) show days left, the share of the time window already used, and a state:
+  on the clock · due soon (≤14 days) · due today · past deadline · not started · no deadline.
+- **Deadlines are sticky.** Setting the first deadline is free. *Moving* one requires a reason, is logged as
+  `deadline_moved`, and shows "moved N×". Two or more moves on a goal raise a gentle "is it realistic?" flag.
+- **Passed deadlines must be closed out:** achieved, missed, or moved with a reason. Nothing silently resets.
+- **Goal timeline:** each goal's runway is split into ~3-month slots, each marked achieved / missed / now /
+  planned / not planned yet / ⚠️ nothing was planned. "Plan it" pre-fills the objective form for the next empty quarter.
+- **Rolling forward:** 14 days before an objective ends, if the goal has no next objective, you get a
+  "Plan next quarter →" prompt that pre-fills the form to start the day after.
+- **Timeline page:** every open commitment with a date, soonest first, grouped by month, with countdowns.
+  **Today** shows the next three deadlines.
+
+Tests: `tests/unit/test_timeline.py` (TML-01..13), `test_int08` (deadline form, refusal without a reason, Timeline page).

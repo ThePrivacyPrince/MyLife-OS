@@ -18,6 +18,7 @@ from lifeos.engines.cascade import (
     CADENCES, MEASURES, KRStatus, goal_horizon_warnings, kr_status, parse_amount, period_bounds, periods_in,
     validate_objective_window, vision_horizon_warnings,
 )
+from lifeos.engines.timeline import Countdown, countdown, quarter_slots, vision_deadline
 from lifeos.enums import Actor, EventType, TaskStatus as S
 from lifeos.errors import NotFound, ReasonRequired, ValidationError
 from lifeos.models import (
@@ -75,6 +76,8 @@ def create_vision(s: Session, *, pillar: str, title: str, description: str = "",
                   today: dt.date | None = None) -> tuple[Vision, list[str]]:
     if s.get(Pillar, pillar) is None:
         raise ValidationError(f"Unknown pillar '{pillar}'.")
+    if target_year is None:
+        raise ValidationError("A vision needs a target year - when do you want to be there?")
     today = today or get_settings().today()
     c = get_settings().cascade
     v = Vision(code=_next_code(s, Vision, f"{pillar}-V"), pillar_code=pillar, title=_clean(title),
@@ -91,6 +94,8 @@ def create_goal(s: Session, *, pillar: str, title: str, description: str = "", t
                 today: dt.date | None = None) -> tuple[Goal, list[str]]:
     if s.get(Pillar, pillar) is None:
         raise ValidationError(f"Unknown pillar '{pillar}'.")
+    if target_date is None:
+        raise ValidationError("A goal needs a deadline - when should you reach it?")
     today = today or get_settings().today()
     c = get_settings().cascade
     vision = get_by_code(s, "vision", vision_code) if vision_code else None
@@ -122,7 +127,7 @@ def create_objective(s: Session, *, goal_code: str, title: str, start_date: dt.d
                      end_date: dt.date | None = None, description: str = "") -> Objective:
     goal = get_by_code(s, "goal", goal_code)
     c = get_settings().cascade
-    end_date = end_date or start_date + dt.timedelta(days=c.objective_default_days)
+    end_date = end_date or start_date + dt.timedelta(days=c.objective_default_days - 1)  # 91 days inclusive
     validate_objective_window(start_date, end_date, c.objective_max_days)
     if goal.target_date and start_date > goal.target_date:
         raise ValidationError("Objective starts after its goal's target date.")
@@ -130,6 +135,7 @@ def create_objective(s: Session, *, goal_code: str, title: str, start_date: dt.d
                   description=description, start_date=start_date, end_date=end_date)
     s.add(o)
     s.flush()
+    s.expire(goal, ["objectives"])  # keep goal.objectives in sync for timelines and gap checks
     _plan_log(s, "objective", o.code, "created", to=f"{o.title} ({start_date} to {end_date})")
     return o
 
@@ -293,12 +299,27 @@ def cascade_gaps(s: Session, day: dt.date) -> list[Gap]:
     for p in s.scalars(select(Pillar).order_by(Pillar.sort_order)):
         if not any(v.pillar_code == p.code for v in visions):
             gaps.append(Gap("vision", None, f"{p.name}: no 3-5 year vision yet. Where do you want to be?"))
+    lead = get_settings().cascade.next_objective_lead_days
     for v in visions:
+        if v.target_year is None:
+            gaps.append(Gap("vision", v.code, f"Vision '{v.title}' has no target year - no countdown."))
+        elif vision_deadline(v.target_year) < day:
+            gaps.append(Gap("vision", v.code, f"Vision '{v.title}' reached its target year - close it out or "
+                                              "set the next horizon."))
         if not any(g.vision_id == v.id for g in goals):
             gaps.append(Gap("vision", v.code, f"Vision '{v.title}' has no 6-12 month goal moving it forward."))
     for g in goals:
         if g.vision_id is None:
             gaps.append(Gap("goal", g.code, f"Goal {g.code} '{g.title}' isn't connected to a vision."))
+        if g.target_date is None:
+            gaps.append(Gap("goal", g.code, f"Goal {g.code} '{g.title}' has no deadline - set one so it counts down."))
+        elif g.target_date < day:
+            gaps.append(Gap("goal", g.code, f"Goal {g.code} '{g.title}' passed its deadline ({g.target_date}) - "
+                                            "close it out: achieved, missed, or move the deadline with a reason."))
+        moves = deadline_moves(s, "goal", g.code)
+        if moves >= 2:
+            gaps.append(Gap("goal", g.code, f"Goal {g.code}'s deadline has moved {moves} times. Is it realistic, "
+                                            "or does it need smaller objectives?"))
         if not active_objectives(g, day):
             gaps.append(Gap("goal", g.code, f"Goal {g.code} '{g.title}' has no objective for this quarter."))
     for o in s.scalars(select(Objective).where(Objective.status == "active")):
@@ -307,10 +328,127 @@ def cascade_gaps(s: Session, day: dt.date) -> list[Gap]:
                                                  "achieved, missed, or dropped?"))
         elif not any(kr.status == "active" for kr in o.key_results):
             gaps.append(Gap("objective", o.code, f"Objective '{o.title}' has no daily/weekly key results."))
+        if day <= o.end_date and (o.end_date - day).days <= lead and o.goal.status == "active" \
+                and (o.goal.target_date is None or o.end_date < o.goal.target_date) \
+                and not any(n.start_date > o.end_date - dt.timedelta(days=7) and n.id != o.id
+                            and n.status != "dropped" for n in o.goal.objectives):
+            gaps.append(Gap("objective", o.code, f"'{o.title}' ends in {(o.end_date - day).days} days - plan "
+                                                 f"next quarter's objective for {o.goal.code} so the chain keeps going."))
     for kr in active_key_results(s, day):
         if kr.measure == "completions" and not kr.tasks and not kr.templates:
             gaps.append(Gap("key_result", kr.code, f"Key result '{kr.title}' has no task or routine driving it."))
     return gaps
+
+
+# ---------------------------------------------------------------- deadlines, countdowns, timelines
+def _created(row) -> dt.date:
+    return get_settings().local_date(row.created_at) if row.created_at else get_settings().today()
+
+
+def deadline_of(entity: str, row) -> dt.date | None:
+    return {"vision": lambda r: vision_deadline(r.target_year), "goal": lambda r: r.target_date,
+            "objective": lambda r: r.end_date}[entity](row)
+
+
+def start_of(entity: str, row) -> dt.date:
+    if entity == "objective":
+        return row.start_date
+    if entity == "goal" and row.objectives:
+        return min(_created(row), min(o.start_date for o in row.objectives))
+    return _created(row)
+
+
+def countdown_for(entity: str, row, today: dt.date) -> Countdown:
+    return countdown(start_of(entity, row), deadline_of(entity, row), today, get_settings().cascade.due_soon_days)
+
+
+def change_deadline(s: Session, entity: str, code: str, new, reason: str = "") -> None:
+    """Set or move a deadline. Setting the first one is free; MOVING one needs a reason and is counted."""
+    row = get_by_code(s, entity, code)
+    old = deadline_of(entity, row)
+    if old is not None and not (reason and reason.strip()):
+        raise ReasonRequired("Moving a deadline needs a reason - it's how you avoid quietly starting over.")
+    if entity == "vision":
+        year = int(new)
+        row.target_year = year
+        new_date = vision_deadline(year)
+    elif entity == "goal":
+        if not isinstance(new, dt.date):
+            raise ValidationError("Goal deadline must be a date.")
+        row.target_date = new_date = new
+    elif entity == "objective":
+        if not isinstance(new, dt.date):
+            raise ValidationError("Objective end must be a date.")
+        validate_objective_window(row.start_date, new, get_settings().cascade.objective_max_days)
+        row.end_date = new_date = new
+    else:
+        raise ValidationError(f"{entity} has no deadline.")
+    if old == new_date:
+        raise ValidationError("That's the same deadline.")
+    _plan_log(s, entity, code, "deadline_set" if old is None else "deadline_moved", frm=old, to=new_date,
+              reason=(reason or "").strip() or None)
+    s.flush()
+
+
+def deadline_moves(s: Session, entity: str, code: str) -> int:
+    return s.scalar(select(func.count()).select_from(PlanEvent).where(
+        PlanEvent.entity_type == entity, PlanEvent.entity_code == code,
+        PlanEvent.event_type == "deadline_moved")) or 0
+
+
+@dataclass(frozen=True)
+class Slot:
+    start: dt.date
+    end: dt.date
+    objectives: tuple[Objective, ...]
+    state: str  # achieved | missed | active | planned | unplanned | gap (past, nothing planned)
+    current: bool
+
+
+def goal_timeline(goal: Goal, today: dt.date) -> list[Slot]:
+    """The goal's runway cut into quarters, each showing what (if anything) was planned for it."""
+    if goal.target_date is None:
+        return []
+    live = [o for o in goal.objectives if o.status != "dropped"]
+    slots = []
+    for lo, hi in quarter_slots(start_of("goal", goal), goal.target_date):
+        objs = tuple(o for o in live if o.start_date <= hi and o.end_date >= lo)
+        current = lo <= today <= hi
+        if not objs:
+            state = "gap" if hi < today else "unplanned"
+        elif all(o.status == "achieved" for o in objs):
+            state = "achieved"
+        elif any(o.status == "missed" for o in objs) and hi < today:
+            state = "missed"
+        elif current:
+            state = "active"
+        else:
+            state = "planned"
+        slots.append(Slot(lo, hi, objs, state, current))
+    return slots
+
+
+@dataclass(frozen=True)
+class Deadline:
+    date: dt.date
+    tier: str
+    code: str
+    title: str
+    countdown: Countdown
+    moves: int
+
+
+def upcoming_deadlines(s: Session, today: dt.date, include_overdue: bool = True) -> list[Deadline]:
+    """Every open commitment with a date, soonest first - the roadmap."""
+    out: list[Deadline] = []
+    for entity, model in (("vision", Vision), ("goal", Goal), ("objective", Objective)):
+        for row in s.scalars(select(model).where(model.status == "active")):
+            d = deadline_of(entity, row)
+            if d is None or (d < today and not include_overdue):
+                continue
+            out.append(Deadline(d, entity, row.code, row.title, countdown_for(entity, row, today),
+                                deadline_moves(s, entity, row.code)))
+    return sorted(out, key=lambda x: (x.date, ("objective", "goal", "vision").index(x.tier)))
 
 
 def unlinked_open_tasks(s: Session) -> list[Task]:
