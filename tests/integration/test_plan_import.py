@@ -108,3 +108,11 @@ def test_imp06_cli_reports_errors_cleanly(tmp_path, monkeypatch, capsys):
     assert main(["import-plan", str(f)]) == 0
     assert main(["import-plan", str(f)]) == 1
     assert "already imported" in capsys.readouterr().err
+
+
+def test_imp07_missing_file_is_a_clean_error(tmp_path, monkeypatch, capsys):
+    from lifeos.cli import main
+    monkeypatch.setenv("LIFEOS_DB", str(tmp_path / "cli.db"))
+    assert main(["import-plan", str(tmp_path / "nope.yaml")]) == 1
+    err = capsys.readouterr().err
+    assert "file not found" in err and "Traceback" not in err

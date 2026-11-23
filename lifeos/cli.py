@@ -79,6 +79,10 @@ def main(argv: list[str] | None = None) -> int:
     except LifeOSError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+    except FileNotFoundError as exc:
+        print(f"Error: file not found: {exc.filename}. Check the path (try: mdfind -name <part-of-the-name>).",
+              file=sys.stderr)
+        return 1
 
 
 def _run(args, factory, today) -> int:
