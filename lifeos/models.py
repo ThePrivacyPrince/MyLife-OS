@@ -10,7 +10,7 @@ import datetime as dt
 from decimal import Decimal
 
 from sqlalchemy import (
-    JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, CheckConstraint,
+    JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Time, UniqueConstraint, CheckConstraint,
 )
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -279,5 +279,61 @@ class DayReview(Base):
     date: Mapped[dt.date] = mapped_column(Date, unique=True)
     note: Mapped[str] = mapped_column(Text, default="")
     summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class CalendarEvent(Base):
+    """A one-off block on the calendar: an appointment, exam, study block, or an imported calendar item."""
+
+    __tablename__ = "calendar_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    day: Mapped[dt.date] = mapped_column(Date)
+    start_time: Mapped[dt.time | None] = mapped_column(Time)  # None = all day
+    end_time: Mapped[dt.time | None] = mapped_column(Time)
+    kind: Mapped[str] = mapped_column(String(16), default="other")
+    pillar_code: Mapped[str | None] = mapped_column(ForeignKey("pillars.code"))
+    location: Mapped[str] = mapped_column(String(200), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String(16), default="manual")  # manual | ics
+    source_uid: Mapped[str | None] = mapped_column(String(300))
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"))  # set when turned into a task
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("source", "source_uid", "day", name="uq_imported_event"),)
+
+
+class EventSeries(Base):
+    """A repeating block, e.g. a class every Mon/Wed 9:00-10:30 for the semester. Expanded when read."""
+
+    __tablename__ = "event_series"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(16), default="class")
+    pillar_code: Mapped[str | None] = mapped_column(ForeignKey("pillars.code"))
+    rule: Mapped[str] = mapped_column(String(200))
+    frequency_label: Mapped[str] = mapped_column(String(64), default="")
+    start_date: Mapped[dt.date] = mapped_column(Date)
+    end_date: Mapped[dt.date] = mapped_column(Date)
+    start_time: Mapped[dt.time] = mapped_column(Time)
+    end_time: Mapped[dt.time] = mapped_column(Time)
+    location: Mapped[str] = mapped_column(String(200), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    exceptions: Mapped[list] = mapped_column(JSON, default=list)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class WeeklyReview(Base):
+    __tablename__ = "weekly_reviews"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    week_start: Mapped[dt.date] = mapped_column(Date, unique=True)  # Monday
+    wins: Mapped[str] = mapped_column(Text, default="")
+    slipped: Mapped[str] = mapped_column(Text, default="")
+    lessons: Mapped[str] = mapped_column(Text, default="")
+    energy: Mapped[int | None] = mapped_column(Integer)  # 1-5
+    focus: Mapped[list] = mapped_column(JSON, default=list)  # top 3 for next week
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)  # metrics snapshot
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

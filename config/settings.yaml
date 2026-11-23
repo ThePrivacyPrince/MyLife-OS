@@ -30,3 +30,9 @@ cascade:
   objective_max_days: 100      # an "objective" longer than ~3 months is really a goal
   due_soon_days: 14            # countdowns turn amber inside this window
   next_objective_lead_days: 14 # start nagging to plan next quarter this many days before an objective ends
+
+planner:
+  weekly_review_day: 6        # 0=Mon ... 6=Sun - the review is due on this day (and the Monday after, if skipped)
+  agenda_days: 7
+  ics_days_back: 30           # calendar import window
+  ics_days_ahead: 240

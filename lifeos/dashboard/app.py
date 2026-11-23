@@ -21,6 +21,8 @@ from lifeos.errors import GateViolation, LifeOSError
 from lifeos.engines.cascade import TIER_LABELS
 from lifeos.models import Goal, KeyResult, Objective, Pillar, RecurringTemplate, Task, Vision
 from lifeos.services import cascade as C
+from lifeos.services import planner_cal as P
+from lifeos.services import weekly as W
 from lifeos.services import recurring as R
 from lifeos.services import tasks as T
 from lifeos.services.planner import detect_patterns, plan_day, recurring_adherence, review_day, save_review
@@ -75,8 +77,8 @@ def val(key: str, default=None):
 
 # ------------------------------------------------------------------ sidebar
 st.sidebar.title("◎ LIFE OS")
-page = st.sidebar.radio("View", ["Today", "Plan", "Timeline", "Add", "Recurring", "All tasks", "Review"],
-                        label_visibility="collapsed")
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Add", "Recurring", "All tasks", "Review"]
+page = st.sidebar.radio("View", PAGES, label_visibility="collapsed", key="nav")
 day: dt.date = st.sidebar.date_input("Planning date", value=get_settings().today())
 pillar_filter = st.sidebar.multiselect("Pillars", list(ICON), format_func=lambda c: f"{ICON[c]} {c}")
 kind_filter = st.sidebar.radio("Task type", ["All", "One-time", "Recurring"], horizontal=True)
@@ -213,6 +215,369 @@ def task_actions(t: Task, k: str, gated: bool) -> None:
                 "Completed (override recorded)"))
 
 
+
+# ================================================================== Planner
+PL_VIEWS = ["Agenda", "Week", "Month", "Weekly review"]
+
+
+def _pl_anchor() -> dt.date:
+    return SS.get("pl_anchor") or day
+
+
+def _pl_view() -> str:
+    return SS.get("pl_view") or "Agenda"
+
+
+def pl_move(direction: int) -> None:
+    a, v = _pl_anchor(), _pl_view()
+    SS["pl_anchor"] = P.shift_month(a, direction) if v == "Month" else a + dt.timedelta(days=7 * direction)
+
+
+def pl_today() -> None:
+    SS["pl_anchor"] = day
+
+
+def pl_open_day(d: dt.date) -> None:
+    SS["pl_anchor"], SS["pl_view"] = d, "Agenda"
+
+
+def go_weekly_review(week: dt.date) -> None:
+    SS["nav"], SS["pl_view"], SS["pl_anchor"] = "Planner", "Weekly review", week
+
+
+def _short(text: str, n: int = 34) -> str:
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def _day_label(d: dt.date) -> tuple[str, str]:
+    if d == day:
+        return "Today", f"{d:%a %B} {d.day}"
+    if d == day + dt.timedelta(days=1):
+        return "Tomorrow", f"{d:%a %B} {d.day}"
+    if d == day - dt.timedelta(days=1):
+        return "Yesterday", f"{d:%a %B} {d.day}"
+    return f"{d:%a}", f"{d:%B} {d.day}"
+
+
+def agenda_day(a) -> None:
+    head, sub = _day_label(a.day)
+    st.markdown(f"#### {head} &nbsp;:gray[{sub}]")
+    if a.empty:
+        st.caption("Nothing planned today" if a.day == day else "Nothing planned")
+        return
+    for b in a.blocks:
+        where = f" · {b.location}" if b.location else ""
+        st.markdown(f"{P.KINDS.get(b.kind, '•')} **{b.time_label}** &nbsp; {b.title}:gray[{where}]")
+    for dl in a.deadlines:
+        st.markdown(f"🎯 **Deadline** &nbsp; {dl.title} :gray[· {TIER_LABELS[dl.tier]}]")
+    for tk in a.tasks:
+        if tk.protected:  # sleep, shifts: they're commitments, not to-dos
+            continue
+        done = tk.status == S.COMPLETED
+        cols = st.columns([0.05, 0.95])
+        if done:
+            cols[0].markdown("✅")
+            cols[1].markdown(f"~~{tk.title}~~ :gray[· P{tk.priority}]")
+            continue
+        cols[0].button("○", key=f"ag{a.day}{tk.id}", help="Mark done", on_click=act, args=(
+            lambda s, i=tk.id: T.transition(s, i, S.COMPLETED, today=day), "Completed ✓"))
+        late = " · :red[overdue]" if tk.due_date and tk.due_date < a.day else ""
+        due = f" · due {tk.due_date:%b %d}" if tk.due_date and not late else ""
+        cols[1].markdown(f"{ICON.get(tk.pillar_code, '')} {tk.title} :gray[· P{tk.priority}{due}]{late}"
+                         + (" ↻" if tk.is_recurring else ""))
+    extras = []
+    if a.routines:
+        extras.append("↻ " + " · ".join(a.routines))
+    if a.booked_minutes:
+        extras.append(f"⏱️ {a.booked_minutes / 60:.1f} h on the calendar")
+    if extras:
+        st.caption("  \n".join(extras))
+
+
+def planner_agenda() -> None:
+    for a in P.agenda(s, _pl_anchor(), get_settings().planner.agenda_days, today=day):
+        agenda_day(a)
+        st.divider()
+
+
+def planner_week() -> None:
+    start = P.week_start(_pl_anchor())
+    days = P.agenda(s, start, 7, today=day)
+    cols = st.columns(7)
+    for col, a in zip(cols, days):
+        with col:
+            mark = "🔵 " if a.day == day else ""
+            st.markdown(f"**{mark}{a.day:%a} {a.day.day}**")
+            if a.empty:
+                st.caption("—")
+            for b in a.blocks:
+                st.caption(f"{P.KINDS.get(b.kind, '•')} {b.time_label if b.start else ''} {_short(b.title, 22)}")
+            for dl in a.deadlines:
+                st.caption(f"🎯 {_short(dl.title, 24)}")
+            for tk in a.tasks:
+                if tk.protected:
+                    continue
+                box = "✅" if tk.status == S.COMPLETED else ("🔴" if tk.priority == 1 else "○")
+                st.caption(f"{box} {_short(tk.title, 24)}")
+            if a.routines:
+                st.caption(f"↻ {len(a.routines)} routine{'s' if len(a.routines) != 1 else ''}")
+            if a.booked_minutes:
+                st.caption(f"⏱️ {a.booked_minutes / 60:.1f}h")
+            st.button("Open", key=f"wk{a.day}", on_click=pl_open_day, args=(a.day,))
+
+    st.subheader("🗂️ Plan the week")
+    pile = P.unscheduled_tasks(s)
+    if not pile:
+        st.caption("Every open task already has a day. 🙌")
+        return
+    st.caption("Tasks with no day yet. Give each one a day - planning ahead never counts as a slip.")
+    week_days = [d for d in (start + dt.timedelta(days=i) for i in range(7)) if d >= day] or [day]
+    for tk in pile[:15]:
+        c = st.columns([5, 2, 1])
+        due = f" · due {tk.due_date:%b %d}" if tk.due_date else ""
+        c[0].markdown(f"{ICON.get(tk.pillar_code, '')} {tk.title} :gray[· P{tk.priority}{due}]")
+        default = week_days.index(tk.due_date) if tk.due_date in week_days else 0
+        c[1].selectbox("Day", week_days, index=default, key=f"pd{tk.id}", label_visibility="collapsed",
+                       format_func=lambda d: f"{d:%a %b} {d.day}")
+        c[2].button("Plan", key=f"pb{tk.id}", on_click=act, args=(
+            lambda s, i=tk.id: P.plan_task_on(s, i, val(f"pd{i}"), today=day), "Planned"))
+    if len(pile) > 15:
+        st.caption(f"+ {len(pile) - 15} more in **All tasks**.")
+
+
+def planner_month() -> None:
+    a = _pl_anchor()
+    grid = P.month_weeks(a.year, a.month)
+    days = {x.day: x for x in P.agenda(s, grid[0][0], len(grid) * 7, today=day)}
+    head = st.columns(7)
+    for col, name in zip(head, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]):
+        col.markdown(f"**{name}**")
+    for week in grid:
+        cols = st.columns(7)
+        for col, d in zip(cols, week):
+            ag = days[d]
+            with col, st.container(border=True):
+                num = f"{d.day}"
+                if d == day:
+                    st.markdown(f"**:blue[● {num}]**")
+                elif d.month != a.month:
+                    st.caption(num)
+                else:
+                    st.markdown(f"**{num}**")
+                lines = ([f"{P.KINDS.get(b.kind, '•')} {_short(b.title, 16)}" for b in ag.blocks]
+                         + [f"🎯 {_short(x.title, 16)}" for x in ag.deadlines]
+                         + [f"{'✅' if x.status == S.COMPLETED else '○'} {_short(x.title, 16)}" for x in ag.tasks
+                            if not x.protected])
+                for line in lines[:3]:
+                    st.caption(line)
+                if len(lines) > 3:
+                    st.caption(f"+{len(lines) - 3} more")
+                if d.month == a.month and lines:
+                    st.button("›", key=f"mo{d}", on_click=pl_open_day, args=(d,), help="Open this day")
+
+
+def planner_weekly_review() -> None:
+    start = P.week_start(_pl_anchor())
+    end = start + dt.timedelta(days=6)
+    if start > day:
+        st.info("That week hasn't started yet. Use ◀ to go back.")
+        return
+    w = W.week_summary(s, start, day)
+    existing = W.get_review(s, start)
+    st.markdown(f"#### {start:%b} {start.day} – {end:%b} {end.day}" + ("  ✅ reviewed" if existing else "")
+                + ("  :gray[· in progress - only finished days are scored]" if start <= day <= end else ""))
+    pct = lambda r: "n/a" if r is None else f"{r:.0%}"  # noqa: E731
+    c = st.columns(5)
+    c[0].metric("Completed", len(w.completed))
+    c[1].metric("P1 done", pct(w.p1_rate), help=f"{w.p1_done} of {w.p1_total} critical commitments")
+    c[2].metric("Routines", pct(w.routine_rate), help=f"{w.routine_done} of {w.routine_total}")
+    c[3].metric("Key results met", f"{w.kr_met}/{w.kr_scored}" if w.kr_scored else "n/a")
+    hrs = w.metrics()
+    c[4].metric("Class + study", f"{hrs['class_hours'] + hrs['study_hours']:.1f} h",
+                help=f"Class {hrs['class_hours']} h · study {hrs['study_hours']} h (from the calendar)")
+    if w.rescheduled or w.overrides:
+        st.caption(f"Rescheduled {w.rescheduled}× · priority overrides {w.overrides}×")
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**✅ Got done**")
+        for x in w.completed[:12]:
+            st.caption(f"✓ {x.title}")
+        if not w.completed:
+            st.caption("Nothing recorded this week.")
+    with right:
+        st.markdown("**↪️ Slipped**")
+        for x in w.slipped[:12]:
+            st.caption(f"○ {x.title} · P{x.priority}")
+        for x in w.missed_routines[:6]:
+            st.caption(f"↻ missed: {x.title} ({x.occurrence_date:%a})")
+        if not (w.slipped or w.missed_routines):
+            st.caption("Nothing slipped. 🔥")
+    if w.key_results:
+        st.markdown("**🎯 Key results this week**")
+        for kr, status in w.key_results:
+            st.caption(f"{STATUS_ICON[status.status]} {kr.title} · {STATUS_TEXT[status.status]}")
+    ahead_tasks = W.tasks_due_between(s, end + dt.timedelta(days=1), end + dt.timedelta(days=14))
+    if w.deadlines_ahead or ahead_tasks:
+        st.markdown("**⏳ Coming up in the next two weeks**")
+        for d in w.deadlines_ahead:
+            st.caption(f"🎯 {d.date:%a %b} {d.date.day} · {d.title}")
+        for x in ahead_tasks[:10]:
+            st.caption(f"📌 {x.due_date:%a %b} {x.due_date.day} · {x.title} · P{x.priority}")
+
+    focus = list(existing.focus) if existing else []
+    with st.form(f"wr{start}"):
+        st.markdown("**Reflect**")
+        st.text_area("Wins - what went well?", value=existing.wins if existing else "", key=f"wr_w{start}")
+        st.text_area("What slipped, and why? (design, not discipline: too big? wrong time? missing info?)",
+                     value=existing.slipped if existing else "", key=f"wr_s{start}")
+        st.text_area("Lessons - what will you change next week?", value=existing.lessons if existing else "",
+                     key=f"wr_l{start}")
+        st.select_slider("Energy this week", options=[1, 2, 3, 4, 5], key=f"wr_e{start}",
+                         value=(existing.energy if existing and existing.energy else 3),
+                         format_func=lambda n: {1: "1 😫", 2: "2 😕", 3: "3 😐", 4: "4 🙂", 5: "5 🔥"}[n])
+        st.markdown("**Next week's top 3** - the outcomes that would make next week a win")
+        f = st.columns(3)
+        for i in range(3):
+            f[i].text_input(f"#{i + 1}", value=focus[i] if i < len(focus) else "", key=f"wr_f{i}{start}")
+        st.form_submit_button("Save weekly review", type="primary", on_click=act, args=(
+            lambda s: W.save_weekly_review(
+                s, start, day, wins=val(f"wr_w{start}", ""), slipped=val(f"wr_s{start}", ""),
+                lessons=val(f"wr_l{start}", ""), energy=val(f"wr_e{start}"),
+                focus=[val(f"wr_f{i}{start}", "") for i in range(3)]), "Weekly review saved 🔥"))
+
+    hist = W.history(s)
+    if hist:
+        st.markdown("**📈 Past weeks**")
+        rate = lambda a, b: None if not b else round(100 * a / b)  # noqa: E731
+        st.dataframe([{
+            "week": f"{h.week_start:%b %d}", "completed": h.summary.get("completed"),
+            "P1 %": rate(h.summary.get("p1_done", 0), h.summary.get("p1_total", 0)),
+            "routines %": rate(h.summary.get("routine_done", 0), h.summary.get("routine_total", 0)),
+            "KRs met": f"{h.summary.get('kr_met', 0)}/{h.summary.get('kr_scored', 0)}",
+            "class+study h": (h.summary.get("class_hours", 0) or 0) + (h.summary.get("study_hours", 0) or 0),
+            "energy": h.energy, "top 3": " · ".join(h.focus or []),
+        } for h in hist], hide_index=True, use_container_width=True)
+
+
+def planner_add_section() -> None:
+    st.divider()
+    kinds = list(P.KINDS)
+    kind_fmt = lambda k: f"{P.KINDS[k]} {k}"  # noqa: E731
+    pillar_opts = [None] + _pillar_options()
+    pillar_fmt = lambda x: "-" if x is None else f"{ICON[x]} {x}"  # noqa: E731
+    a, b, c = st.columns(3)
+    with a.expander("➕ Add an event"):
+        with st.form("ev_add", clear_on_submit=True):
+            st.text_input("What", key="ev_t", placeholder="e.g. Office hours with Prof. Smith")
+            st.date_input("Day", value=_pl_anchor(), key="ev_d")
+            st.checkbox("All day", key="ev_all")
+            x = st.columns(2)
+            x[0].time_input("Start", value=dt.time(9), key="ev_s", step=900)
+            x[1].time_input("End", value=dt.time(10), key="ev_e", step=900)
+            st.selectbox("Kind", kinds, key="ev_k", format_func=kind_fmt)
+            st.selectbox("Pillar", pillar_opts, key="ev_p", format_func=pillar_fmt)
+            st.text_input("Where", key="ev_l")
+            st.form_submit_button("Add event", type="primary", on_click=act, args=(lambda s: P.add_event(
+                s, title=val("ev_t", ""), day=val("ev_d"), start_time=None if val("ev_all") else val("ev_s"),
+                end_time=None if val("ev_all") else val("ev_e"), kind=val("ev_k"), pillar=val("ev_p"),
+                location=val("ev_l", "")), "Event added"))
+    with b.expander("🎓 Add a class schedule"):
+        with st.form("ser_add", clear_on_submit=True):
+            st.text_input("Class", key="se_t", placeholder="e.g. Contracts")
+            st.multiselect("Days", ["MO", "TU", "WE", "TH", "FR", "SA", "SU"], key="se_days")
+            x = st.columns(2)
+            x[0].time_input("Start", value=dt.time(9), key="se_s", step=900)
+            x[1].time_input("End", value=dt.time(10, 30), key="se_e", step=900)
+            x = st.columns(2)
+            x[0].date_input("First day", value=day, key="se_sd")
+            x[1].date_input("Last day", value=day + dt.timedelta(days=100), key="se_ed")
+            st.selectbox("Kind", kinds, key="se_k", format_func=kind_fmt)
+            st.selectbox("Pillar", pillar_opts, index=pillar_opts.index("EDU"), key="se_p", format_func=pillar_fmt)
+            st.text_input("Where", key="se_l")
+            st.checkbox("Every other week", key="se_bi")
+            st.form_submit_button("Add schedule", type="primary", on_click=act, args=(lambda s: P.add_series(
+                s, title=val("se_t", ""), weekdays=val("se_days", []), start_date=val("se_sd"), end_date=val("se_ed"),
+                start_time=val("se_s"), end_time=val("se_e"), kind=val("se_k"), pillar=val("se_p"),
+                location=val("se_l", ""), biweekly=val("se_bi", False)), "Schedule added"))
+    with c.expander("📥 Import a calendar (.ics)"):
+        st.caption("Canvas: Calendar → Calendar Feed → open the link to download the .ics. Google Calendar: "
+                   "Settings → Import & export → Export. Re-importing updates items instead of duplicating them.")
+        st.file_uploader("Calendar file", type=["ics"], key="ics_file", label_visibility="collapsed")
+        st.selectbox("Pillar for imported items", pillar_opts, index=pillar_opts.index("EDU"), key="ics_p",
+                     format_func=pillar_fmt)
+        st.button("Import calendar", key="ics_go", disabled=val("ics_file") is None, on_click=do_ics_import)
+
+    with st.expander("🛠️ Manage calendar items"):
+        a0 = P.week_start(_pl_anchor())
+        items = [b for b in P.blocks_between(s, a0, a0 + dt.timedelta(days=27))]
+        singles = [b for b in items if b.event_id]
+        st.caption("One-off and imported items in the next four weeks shown:")
+        for bl in singles[:40]:
+            r = st.columns([5, 1.4, 1])
+            r[0].markdown(f"{P.KINDS.get(bl.kind, '•')} {bl.day:%a %b} {bl.day.day} · {bl.time_label} · {bl.title}")
+            if bl.task_id is None:
+                r[1].button("Make it a task", key=f"et{bl.event_id}", on_click=act, args=(
+                    lambda s, i=bl.event_id: P.event_to_task(s, i), "Task created from calendar item"))
+            else:
+                r[1].caption("✓ task")
+            r[2].button("Delete", key=f"ed{bl.event_id}", on_click=act, args=(
+                lambda s, i=bl.event_id: P.delete_event(s, i), "Deleted"))
+        from lifeos.models import EventSeries
+        series = list(s.scalars(select(EventSeries).where(EventSeries.active.is_(True))))
+        if series:
+            st.caption("Repeating schedules:")
+        for ser in series:
+            r = st.columns([5, 1.2, 1.2, 1])
+            r[0].markdown(f"{P.KINDS.get(ser.kind, '•')} {ser.title} · {ser.frequency_label} · "
+                          f"{ser.start_time:%-I:%M}-{ser.end_time:%-I:%M %p} · until {ser.end_date:%b %d}")
+            r[1].date_input("Skip", value=_pl_anchor(), key=f"sk_s{ser.id}", label_visibility="collapsed")
+            r[2].button("Skip that day", key=f"skb_s{ser.id}", on_click=act, args=(
+                lambda s, i=ser.id: P.skip_series_day(s, i, val(f"sk_s{i}")), "Day skipped"))
+            r[3].button("End", key=f"end_s{ser.id}", on_click=act, args=(
+                lambda s, i=ser.id: P.end_series(s, i), "Schedule ended"))
+
+
+def do_ics_import() -> None:
+    from lifeos.services.ics_import import import_ics
+    f = val("ics_file")
+    try:
+        text = f.getvalue().decode("utf-8", errors="replace")
+    except Exception as exc:
+        flash("error", f"Couldn't read that file: {exc}")
+        return
+    result = {}
+
+    def run(s):
+        result.update(import_ics(s, text, day, pillar=val("ics_p")))
+    act(run, "Calendar imported")
+    if result:
+        flash("success", f"Calendar imported: {result['added']} new, {result['updated']} updated.")
+
+
+def page_planner() -> None:
+    a, v = _pl_anchor(), _pl_view()
+    top = st.columns([2.6, 0.55, 0.9, 0.55, 3.4])
+    label = f"{a:%B %Y}" if v == "Month" else (f"Week of {P.week_start(a):%b} {P.week_start(a).day}"
+                                                if v in ("Week", "Weekly review") else f"{a:%b %Y}")
+    top[0].markdown(f"### 📅 {label}")
+    top[1].button("◀", key="pl_prev", on_click=pl_move, args=(-1,), use_container_width=True)
+    top[2].button("Today", key="pl_today", on_click=pl_today, use_container_width=True)
+    top[3].button("▶", key="pl_next", on_click=pl_move, args=(1,), use_container_width=True)
+    with top[4]:
+        st.segmented_control("View", PL_VIEWS, key="pl_view", label_visibility="collapsed")
+    due = W.review_due(s, day)
+    if due and v != "Weekly review":
+        st.info(f"🗓️ Weekly review time - week of {due:%b} {due.day}.", icon="🔥")
+        st.button("Start weekly review", key="pl_wr", on_click=go_weekly_review, args=(due,))
+    focus = W.current_focus(s, day)
+    if focus and v in ("Agenda", "Week"):
+        st.markdown("**This week's top 3:** " + " · ".join(f"**{i}.** {f}" for i, f in enumerate(focus, 1)))
+    {"Agenda": planner_agenda, "Week": planner_week, "Month": planner_month,
+     "Weekly review": planner_weekly_review}[_pl_view()]()
+    planner_add_section()
+
+
 # ------------------------------------------------------------------ pages
 def page_today() -> None:
     plan = plan_day(s, day)
@@ -231,6 +596,17 @@ def page_today() -> None:
         st.info(f.message, icon="🔍")
     if plan.protected:
         st.caption("🛡️ Protected today: " + " · ".join(p.task.title for p in plan.protected))
+    due = W.review_due(s, day)
+    if due:
+        st.info(f"🗓️ End of the week - time for your weekly review (week of {due:%b} {due.day}).", icon="🔥")
+        st.button("Start weekly review", key="td_wr", on_click=go_weekly_review, args=(due,))
+    focus = W.current_focus(s, day)
+    if focus:
+        st.markdown("**This week's top 3:** " + " · ".join(f"**{i}.** {f}" for i, f in enumerate(focus, 1)))
+    today_blocks = P.blocks_between(s, day, day)
+    if today_blocks:
+        st.caption("📅 Schedule: " + " · ".join(f"{P.KINDS.get(b.kind, '•')} {b.time_label} {b.title}"
+                                               for b in today_blocks))
     road = [d for d in C.upcoming_deadlines(s, day) if d.tier != "vision"][:3]
     if road:
         st.caption("⏳ Countdown: " + " · ".join(
@@ -767,6 +1143,6 @@ def page_review() -> None:
         lambda s: save_review(s, day, val("rv_note", "")), "Review saved"))
 
 
-{"Today": page_today, "Plan": page_plan, "Timeline": page_timeline, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
+{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
  "Review": page_review}[page]()
 s.close()

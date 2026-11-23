@@ -213,8 +213,11 @@ def change_priority(s: Session, task_id: int, new: Priority | int, reason: str, 
 
 
 def reschedule(s: Session, task_id: int, new_date: dt.date, reason: str, actor: Actor = Actor.USER,
-               today: dt.date | None = None) -> Task:
+               today: dt.date | None = None, planned: bool = False) -> Task:
+    """Move a task's working date. `planned=True` is putting it on a day in the planner (not a slip)."""
     task = get_task(s, task_id)
+    if planned and not (reason and reason.strip()):
+        reason = "Planned in the planner"
     if not (reason and reason.strip()):
         raise ReasonRequired("Rescheduling needs a reason (it feeds the end-of-day pattern review).")
     if task.status not in (S.PENDING, S.IN_PROGRESS, S.BLOCKED, S.WAITING, S.DEFERRED):
@@ -224,7 +227,8 @@ def reschedule(s: Session, task_id: int, new_date: dt.date, reason: str, actor: 
         raise ValidationError("Cannot reschedule into the past.")
     old = task.scheduled_date
     task.scheduled_date = new_date
-    log(s, task, EventType.RESCHEDULED, frm=old, to=new_date, reason=reason.strip(), actor=actor)
+    log(s, task, EventType.PLANNED if planned else EventType.RESCHEDULED, frm=old, to=new_date,
+        reason=reason.strip(), actor=actor)
     if task.due_date and new_date > task.due_date:
         log(s, task, EventType.EDITED, frm="on time", to="scheduled after due date",
             reason="Warning: rescheduled past its due date - the due date was NOT moved.", actor=Actor.SYSTEM)

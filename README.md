@@ -22,6 +22,8 @@ Business · Relationships · Environment · Finances · Education.
   Progress flows up the chain, and gaps in it are flagged.
 - **Countdowns and timelines:** every vision, goal and objective has a deadline that counts down. Deadlines only
   move with a recorded reason, and each goal shows its quarter-by-quarter runway.
+- **Planner:** Agenda / Week / Month views, class schedules, calendar (.ics) import from Canvas or Google,
+  "plan the week", and a Sunday weekly review with a scorecard and next week's top 3 ([details](docs/planner.md)).
 - **Plan files:** load a whole vision-to-tasks plan from YAML in one step ([format](docs/plan-files.md)).
   Plan files stay in your git-ignored `data/` folder.
 

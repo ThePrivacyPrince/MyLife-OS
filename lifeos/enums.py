@@ -47,6 +47,7 @@ class EventType(StrEnum):
     PRIORITY_CHANGE = "priority_change"
     GATE_OVERRIDE = "gate_override"
     RESCHEDULED = "rescheduled"
+    PLANNED = "planned"  # put on a day in the planner (not a slip)
     DUE_DATE_CHANGE = "due_date_change"
     EVIDENCE_ADDED = "evidence_added"
     DEPENDENCY_ADDED = "dependency_added"

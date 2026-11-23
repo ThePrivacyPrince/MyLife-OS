@@ -5,7 +5,7 @@ from streamlit.testing.v1 import AppTest
 from lifeos.config import REPO_ROOT
 
 APP = str(REPO_ROOT / "lifeos" / "dashboard" / "app.py")
-PAGES = ["Today", "Plan", "Timeline", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Add", "Recurring", "All tasks", "Review"]
 
 
 @pytest.fixture
@@ -98,3 +98,33 @@ def test_int09_level_and_tracking_key_results_render(seeded_db):
     assert not at.exception
     texts = " ".join(str(p.proto.text) for p in at.get("progress"))
     assert "4 units (as of" in texts and "of 6 units" in texts and "tracking" in texts
+
+
+
+@pytest.mark.parametrize("view", ["Agenda", "Week", "Month", "Weekly review"])
+def test_int10_planner_views_render(seeded_db, view):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Planner").run()
+    at.session_state["pl_view"] = view
+    at.run()
+    assert not at.exception, at.exception
+    for label in ("◀", "Today", "▶"):
+        [b for b in at.button if b.label == label][0].click().run()
+        assert not at.exception
+
+
+def test_int11_add_class_schedule_and_save_weekly_review(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Planner").run()
+    at.text_input(key="se_t").set_value("Contracts")
+    at.multiselect(key="se_days").set_value(["MO", "TU", "WE", "TH", "FR", "SA", "SU"])
+    [b for b in at.button if b.label == "Add schedule"][0].click().run()
+    assert any("Schedule added" in x.value for x in at.success), [e.value for e in at.error]
+    assert any("Contracts" in m.value for m in at.markdown)
+    at.session_state["pl_view"] = "Weekly review"
+    at.run()
+    [b for b in at.button if b.label == "Save weekly review"][0].click().run()
+    assert not at.exception
+    assert any("Weekly review saved" in x.value for x in at.success), [e.value for e in at.error]

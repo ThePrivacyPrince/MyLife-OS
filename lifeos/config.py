@@ -43,12 +43,20 @@ class CascadeSettings(BaseModel):
     next_objective_lead_days: int = 14
 
 
+class PlannerSettings(BaseModel):
+    weekly_review_day: int = Field(6, ge=0, le=6)
+    agenda_days: int = Field(7, ge=1, le=31)
+    ics_days_back: int = 30
+    ics_days_ahead: int = 240
+
+
 class Settings(BaseModel):
     timezone: str = "America/New_York"
     database_path: str = "data/lifeos.db"
     planning: PlanningSettings = PlanningSettings()
     controls: ControlSettings = ControlSettings()
     cascade: CascadeSettings = CascadeSettings()
+    planner: PlannerSettings = PlannerSettings()
 
     @property
     def tz(self) -> ZoneInfo:
