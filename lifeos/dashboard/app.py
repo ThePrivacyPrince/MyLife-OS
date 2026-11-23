@@ -22,6 +22,7 @@ from lifeos.engines.cascade import TIER_LABELS
 from lifeos.models import Goal, KeyResult, Objective, Pillar, RecurringTemplate, Task, Vision
 from lifeos.services import cascade as C
 from lifeos.services import planner_cal as P
+from lifeos.services import task_edit as E
 from lifeos.services import weekly as W
 from lifeos.services import recurring as R
 from lifeos.services import tasks as T
@@ -146,10 +147,98 @@ def task_card(t: Task, gate=None, overdue: bool = False, prefix: str = "") -> No
             task_actions(t, k, gated)
 
 
+def edit_form(t: Task, k: str) -> None:
+    """One form to edit everything about a task. Audit rules still apply; nothing saves if any part is refused."""
+    v = E.task_values(t)
+    with st.form(f"edit{k}"):
+        st.text_input("Title", value=v["title"], key=f"e_t{k}")
+        st.text_area("Notes", value=v["description"], key=f"e_n{k}", height=80)
+        c = st.columns(3)
+        pills = _pillar_options()
+        c[0].selectbox("Pillar", pills, index=pills.index(v["pillar"]), key=f"e_p{k}",
+                       format_func=lambda x: f"{ICON[x]} {x}")
+        c[1].radio("Priority", [1, 2, 3], index=v["priority"] - 1, key=f"e_pr{k}", horizontal=True,
+                   format_func=lambda p: f"P{p}")
+        c[2].number_input("Estimate (min, 0 = none)", min_value=0, max_value=1440, step=5,
+                          value=v["estimated_minutes"] or 0, key=f"e_m{k}")
+        c = st.columns(2)
+        c[0].date_input("Work on it on", value=v["scheduled_date"] or day, key=f"e_s{k}")
+        c[0].checkbox("No work day yet", value=v["scheduled_date"] is None, key=f"e_sn{k}")
+        c[1].date_input("Due date", value=v["due_date"] or day, key=f"e_d{k}")
+        c[1].checkbox("No due date", value=v["due_date"] is None, key=f"e_dn{k}")
+        c = st.columns(2)
+        goals = _goal_options()
+        c[0].selectbox("Goal", goals, index=goals.index(v["goal_code"]) if v["goal_code"] in goals else 0,
+                       key=f"e_g{k}", format_func=_goal_label)
+        krs = _kr_options()
+        c[1].selectbox("Drives key result ↑", krs, key=f"e_k{k}", format_func=_kr_label,
+                       index=krs.index(v["key_result_code"]) if v["key_result_code"] in krs else 0)
+        c = st.columns(2)
+        c[0].checkbox("Requires evidence to complete", value=v["evidence_required"], key=f"e_ev{k}")
+        c[1].checkbox("Protected (never gated)", value=v["protected"], key=f"e_pt{k}")
+        st.text_input("Reason (only needed to change priority, move a due date, or push back work that was due)",
+                      key=f"e_r{k}")
+        st.form_submit_button("Save changes", type="primary", on_click=act, args=(
+            lambda s, i=t.id: E.update_task(
+                s, i, title=val(f"e_t{k}", ""), description=val(f"e_n{k}", ""), pillar=val(f"e_p{k}"),
+                priority=val(f"e_pr{k}"), estimated_minutes=val(f"e_m{k}") or None,
+                scheduled_date=None if val(f"e_sn{k}") else val(f"e_s{k}"),
+                due_date=None if val(f"e_dn{k}") else val(f"e_d{k}"),
+                goal_code=val(f"e_g{k}"), key_result_code=val(f"e_k{k}"),
+                evidence_required=val(f"e_ev{k}"), protected=val(f"e_pt{k}"),
+                reason=val(f"e_r{k}", ""), today=day), "Task updated ✏️"))
+
+
+def _rule_parts(rule: str) -> tuple[list[str], int]:
+    parts = dict(p.split("=", 1) for p in rule.split(";") if "=" in p)
+    days = parts.get("BYDAY", "").split(",") if parts.get("BYDAY") else []
+    return days, int(parts.get("BYMONTHDAY", 0) or 0)
+
+
+def routine_edit_form(tpl: RecurringTemplate) -> None:
+    k = f"r{tpl.id}"
+    freq_now = tpl.frequency_label.split(" (")[0] or "daily"
+    days_now, mday_now = _rule_parts(tpl.rule)
+    freqs = ["daily", "weekdays", "weekly", "biweekly", "monthly", "custom"]
+    with st.form(f"redit{k}"):
+        st.text_input("Routine", value=tpl.title, key=f"re_t{k}")
+        c = st.columns(3)
+        pills = _pillar_options()
+        c[0].selectbox("Pillar", pills, index=pills.index(tpl.pillar_code), key=f"re_p{k}",
+                       format_func=lambda x: f"{ICON[x]} {x}")
+        c[1].radio("Priority", [1, 2, 3], index=tpl.priority - 1, key=f"re_pr{k}", horizontal=True,
+                   format_func=lambda p: f"P{p}")
+        c[2].number_input("Estimate (min, 0 = none)", min_value=0, max_value=1440, step=5,
+                          value=tpl.estimated_minutes or 0, key=f"re_m{k}")
+        c = st.columns(3)
+        c[0].selectbox("Repeats", freqs, index=freqs.index(freq_now) if freq_now in freqs else 0, key=f"re_f{k}")
+        c[1].multiselect("On days", ["MO", "TU", "WE", "TH", "FR", "SA", "SU"], default=days_now, key=f"re_d{k}")
+        c[2].number_input("Day of month (0 = start day)", min_value=0, max_value=31, value=mday_now, key=f"re_md{k}")
+        st.text_input("Custom RRULE", value=tpl.rule if freq_now == "custom" else "", key=f"re_c{k}")
+        c = st.columns(3)
+        c[0].selectbox("If a day is missed", ["mark_missed", "carry_over"],
+                       index=0 if tpl.missed_policy == "mark_missed" else 1, key=f"re_mp{k}",
+                       format_func=lambda m: {"mark_missed": "Record as missed", "carry_over": "Carry over"}[m])
+        c[1].date_input("Ends", value=tpl.end_date or day + dt.timedelta(days=90), key=f"re_e{k}")
+        c[1].checkbox("No end date", value=tpl.end_date is None, key=f"re_en{k}")
+        c[2].checkbox("Protected (never gated)", value=tpl.protected, key=f"re_pt{k}")
+        st.text_input("Reason (needed to change priority)", key=f"re_r{k}")
+        st.caption("Changes apply to today's open occurrence and every future one. Past days stay as they happened.")
+        st.form_submit_button("Save routine", type="primary", on_click=act, args=(
+            lambda s, i=tpl.id: E.update_template(
+                s, i, title=val(f"re_t{k}"), pillar=val(f"re_p{k}"), priority=val(f"re_pr{k}"),
+                estimated_minutes=val(f"re_m{k}") or None, missed_policy=val(f"re_mp{k}"),
+                protected=val(f"re_pt{k}"), end_date=None if val(f"re_en{k}") else val(f"re_e{k}"),
+                frequency=val(f"re_f{k}"), weekdays=val(f"re_d{k}") or None, month_day=val(f"re_md{k}") or None,
+                custom_rule=val(f"re_c{k}") or None, reason=val(f"re_r{k}", ""), today=day), "Routine updated ✏️"))
+
+
 def task_actions(t: Task, k: str, gated: bool) -> None:
     allowed = TRANSITIONS[S(t.status)]
-    tabs = st.tabs(["Block / wait", "Defer / cancel", "Priority", "Reschedule", "Evidence", "History", "Link ↑"]
-                   + (["Override"] if gated else []))
+    edit_tab, *tabs = st.tabs(["✏️ Edit", "Block / wait", "Defer / cancel", "Priority", "Reschedule", "Evidence",
+                               "History", "Link ↑"] + (["Override"] if gated else []))
+    with edit_tab:
+        edit_form(t, k)
     with tabs[0]:
         st.text_input("Reason", key=f"br{k}", placeholder="What is it waiting on?")
         st.date_input("Follow up on", key=f"bf{k}", value=day + dt.timedelta(days=2))
@@ -274,11 +363,13 @@ def agenda_day(a) -> None:
         if tk.protected:  # sleep, shifts: they're commitments, not to-dos
             continue
         done = tk.status == S.COMPLETED
-        cols = st.columns([0.05, 0.95])
+        cols = st.columns([0.05, 0.85, 0.10])
         if done:
             cols[0].markdown("✅")
             cols[1].markdown(f"~~{tk.title}~~ :gray[· P{tk.priority}]")
             continue
+        with cols[2].popover("✏️", help="Edit"):
+            edit_form(tk, f"ag{a.day}{tk.id}")
         cols[0].button("○", key=f"ag{a.day}{tk.id}", help="Mark done", on_click=act, args=(
             lambda s, i=tk.id: T.transition(s, i, S.COMPLETED, today=day), "Completed ✓"))
         late = " · :red[overdue]" if tk.due_date and tk.due_date < a.day else ""
@@ -673,6 +764,13 @@ def _goal_options() -> list[str | None]:
     return [None] + [g.code for g in s.scalars(select(Goal).order_by(Goal.code))]
 
 
+def _goal_label(code: str | None) -> str:
+    if code is None:
+        return "- none -"
+    title = s.scalar(select(Goal.title).where(Goal.code == code))
+    return f"{code} · {title}" if title else code
+
+
 def page_add() -> None:
     st.title("Add")
     one, rec = st.tabs(["One-time task", "Recurring task"])
@@ -685,7 +783,7 @@ def page_add() -> None:
         c = st.columns(3)
         c[0].date_input("Due date", value=None, key="nt_due")
         c[1].date_input("Don't start before", value=None, key="nt_sched")
-        c[2].selectbox("Goal", _goal_options(), key="nt_goal")
+        c[2].selectbox("Goal", _goal_options(), key="nt_goal", format_func=_goal_label)
         open_tasks = list(s.scalars(select(Task).where(Task.status.in_([str(x) for x in OPEN_STATES]))))
         st.multiselect("Can't start until these are done", [t.id for t in open_tasks], key="nt_deps",
                        format_func=lambda i: next(f"#{t.id} {t.title}" for t in open_tasks if t.id == i))
@@ -749,6 +847,8 @@ def page_recurring() -> None:
             st.caption("Next: " + (", ".join(d.strftime("%a %b %d") for d in nxt) or "none"))
             if tpl.key_result:
                 st.caption(f"↑ drives: {tpl.key_result.title}")
+            with st.expander("✏️ Edit routine"):
+                routine_edit_form(tpl)
             with st.expander("Link to a key result ↑"):
                 krs = _kr_options()
                 cur = tpl.key_result.code if tpl.key_result else None

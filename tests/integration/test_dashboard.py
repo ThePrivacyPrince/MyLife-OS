@@ -128,3 +128,39 @@ def test_int11_add_class_schedule_and_save_weekly_review(seeded_db):
     [b for b in at.button if b.label == "Save weekly review"][0].click().run()
     assert not at.exception
     assert any("Weekly review saved" in x.value for x in at.success), [e.value for e in at.error]
+
+
+
+def test_int12_edit_task_from_the_card(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    k = next(w.key for w in at.text_input if w.key and w.key.startswith("e_t"))
+    suffix = k[len("e_t"):]
+    at.text_input(key=k).set_value("Finish RXO onboarding (all forms)")
+    at.number_input(key=f"e_m{suffix}").set_value(90)
+    [b for b in at.button if b.label == "Save changes"][0].click().run()
+    assert not at.exception
+    assert any("Task updated" in x.value for x in at.success), [e.value for e in at.error]
+    assert any("Finish RXO onboarding (all forms)" in m.value for m in at.markdown)
+
+
+def test_int13_priority_edit_without_reason_is_refused_visibly(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    k = next(w.key for w in at.radio if w.key and w.key.startswith("e_pr"))
+    at.radio(key=k).set_value(3)
+    [b for b in at.button if b.label == "Save changes"][0].click().run()
+    assert any("needs a reason" in e.value for e in at.error)
+
+
+def test_int14_edit_routine(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Recurring").run()
+    k = next(w.key for w in at.text_input if w.key and w.key.startswith("re_t"))
+    at.text_input(key=k).set_value("Bedroom reset (10 min)")
+    btn = [b for b in at.button if b.label == "Save routine"]
+    idx = [w.key for w in at.text_input if w.key and w.key.startswith("re_t")].index(k)
+    btn[idx].click().run()
+    assert not at.exception
+    assert any("Routine updated" in x.value for x in at.success), [e.value for e in at.error]

@@ -42,3 +42,16 @@ A reminder appears on Today and in the Planner when it's due. It won't appear fo
 6. **Past weeks:** a table to spot trends.
 
 Settings: `config/settings.yaml → planner` (review day, agenda length, import window).
+
+## Editing tasks and routines
+- **✏️ Edit** is the first tab under **More** on every task card (Today, All tasks), and the ✏️ pop-up on every task in the Planner agenda.
+- **One form covers everything:** title, notes, pillar, priority, work day, due date, estimate, goal, key result, evidence required and protected.
+- **A reason is only asked for when it matters:**
+  - changing priority
+  - moving or removing an existing due date
+  - pushing back work that was already due
+
+  Setting a first due date, or planning a work day ahead, is free.
+- **One edit, one transaction:** if any part is refused, nothing is saved. Every change lands in the task's history.
+- **Routines:** **Recurring → ✏️ Edit routine** changes the name, pillar, priority, schedule, estimate, missed-day rule, end date or protection. Changes apply to today's open occurrence and all future ones; past days stay as they happened.
+- **No hard delete:** a mistaken task is *cancelled* with a reason, so the record stays honest.

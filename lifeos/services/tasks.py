@@ -236,13 +236,16 @@ def reschedule(s: Session, task_id: int, new_date: dt.date, reason: str, actor: 
     return task
 
 
-def change_due_date(s: Session, task_id: int, new_due: dt.date | None, reason: str) -> Task:
+def change_due_date(s: Session, task_id: int, new_due: dt.date | None, reason: str = "") -> Task:
+    """Setting a first due date is free; moving or removing one needs a reason."""
     task = get_task(s, task_id)
-    if not (reason and reason.strip()):
-        raise ReasonRequired("Changing a due date needs a reason.")
     old = task.due_date
+    if old is not None and not (reason and reason.strip()):
+        raise ReasonRequired("Moving or removing a due date needs a reason.")
+    if old == new_due:
+        raise ValidationError("That's the same due date.")
     task.due_date = new_due
-    log(s, task, EventType.DUE_DATE_CHANGE, frm=old, to=new_due, reason=reason.strip())
+    log(s, task, EventType.DUE_DATE_CHANGE, frm=old, to=new_due, reason=(reason or "").strip() or None)
     s.flush()
     return task
 
