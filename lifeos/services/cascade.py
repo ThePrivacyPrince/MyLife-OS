@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from lifeos.config import get_settings
 from lifeos.engines.cascade import (
-    CADENCES, MEASURES, KRStatus, goal_horizon_warnings, kr_status, parse_amount, period_bounds, periods_in,
+    CADENCES, MEASURES, KRStatus, goal_horizon_warnings, kr_status, level_status, parse_amount, period_bounds,
+    periods_in,
     validate_objective_window, vision_horizon_warnings,
 )
 from lifeos.engines.timeline import Countdown, countdown, quarter_slots, vision_deadline
@@ -148,9 +149,10 @@ def create_key_result(s: Session, *, objective_code: str, title: str, cadence: s
         raise ValidationError(f"Key results are daily or weekly, not '{cadence}'.")
     if measure not in MEASURES:
         raise ValidationError(f"Unknown measure '{measure}'. Use {MEASURES}.")
-    target = parse_amount(target)
-    if target <= 0:
-        raise ValidationError("Target must be greater than zero.")
+    # No target given = "track only": the number is recorded and shown, never judged against an invented goal.
+    target = Decimal(0) if target is None or str(target).strip() == "" else parse_amount(target)
+    if target < 0:
+        raise ValidationError("Target can't be negative.")
     kr = KeyResult(code=_next_code(s, KeyResult, f"{obj.code}-KR"), objective_id=obj.id, title=_clean(title),
                    cadence=cadence, measure=measure, target=target, unit=unit.strip())
     s.add(kr)
@@ -161,11 +163,12 @@ def create_key_result(s: Session, *, objective_code: str, title: str, cadence: s
 
 def check_in(s: Session, kr_code: str, day: dt.date, value, note: str = "") -> KeyResultCheckIn:
     kr = get_by_code(s, "key_result", kr_code)
-    if kr.measure != "manual":
+    if kr.measure == "completions":
         raise ValidationError("This key result is measured by completing its linked tasks - just complete them.")
     ci = KeyResultCheckIn(key_result_id=kr.id, day=day, value=parse_amount(value), note=note.strip())
     s.add(ci)
     s.flush()
+    s.expire(kr, ["checkins"])  # keep kr.checkins in sync for progress reads in the same session
     _plan_log(s, "key_result", kr.code, "check_in", to=f"{ci.value} on {day}", reason=note or None)
     return ci
 
@@ -243,8 +246,22 @@ def kr_actual(s: Session, kr: KeyResult, lo: dt.date, hi: dt.date) -> Decimal:
     return Decimal(sum(1 for t in done if t.completed_at and lo <= settings.local_date(t.completed_at) <= hi))
 
 
+def kr_latest(kr: KeyResult, as_of: dt.date) -> tuple[Decimal | None, dt.date | None]:
+    """Most recent reading on or before `as_of` (for level key results)."""
+    readings = [c for c in kr.checkins if c.day <= as_of]
+    if not readings:
+        return None, None
+    last = max(readings, key=lambda c: (c.day, c.id))
+    return last.value, last.day
+
+
 def kr_progress(s: Session, kr: KeyResult, day: dt.date) -> tuple[tuple[dt.date, dt.date], KRStatus]:
     period = period_bounds(kr.cadence, day)
+    if day < kr.objective.start_date:
+        # A phase that hasn't started can't be behind.
+        return period, KRStatus(Decimal(0), kr.target, "not_started")
+    if kr.measure == "level":
+        return period, level_status(kr_latest(kr, day)[0], kr.target)
     return period, kr_status(kr_actual(s, kr, *period), kr.target, period, day)
 
 
@@ -263,7 +280,8 @@ def objective_health(s: Session, obj: Objective, day: dt.date) -> Health:
     met = total = 0
     last = min(day - dt.timedelta(days=1), obj.end_date)
     for kr in obj.key_results:
-        if kr.status != "active":
+        # Only weekly/daily flows with a real target have periods to hit; levels and track-only numbers don't.
+        if kr.status != "active" or kr.measure == "level" or kr.target <= 0:
             continue
         for lo, hi in periods_in(kr.cadence, obj.start_date, last) if last >= obj.start_date else []:
             if hi > last:  # period not finished yet
@@ -320,8 +338,10 @@ def cascade_gaps(s: Session, day: dt.date) -> list[Gap]:
         if moves >= 2:
             gaps.append(Gap("goal", g.code, f"Goal {g.code}'s deadline has moved {moves} times. Is it realistic, "
                                             "or does it need smaller objectives?"))
-        if not active_objectives(g, day):
-            gaps.append(Gap("goal", g.code, f"Goal {g.code} '{g.title}' has no objective for this quarter."))
+        upcoming = [o for o in g.objectives if o.status == "active" and o.start_date > day]
+        if not active_objectives(g, day) and not upcoming:
+            gaps.append(Gap("goal", g.code, f"Goal {g.code} '{g.title}' has no objective planned - "
+                                            "nothing is moving it this quarter."))
     for o in s.scalars(select(Objective).where(Objective.status == "active")):
         if o.end_date < day:
             gaps.append(Gap("objective", o.code, f"Objective {o.code} ended {o.end_date} - close it out: "
@@ -401,7 +421,7 @@ class Slot:
     start: dt.date
     end: dt.date
     objectives: tuple[Objective, ...]
-    state: str  # achieved | missed | active | planned | unplanned | gap (past, nothing planned)
+    state: str  # achieved | missed | active | planned | unplanned | gap (past, nothing planned) | lead
     current: bool
 
 
@@ -410,11 +430,14 @@ def goal_timeline(goal: Goal, today: dt.date) -> list[Slot]:
     if goal.target_date is None:
         return []
     live = [o for o in goal.objectives if o.status != "dropped"]
+    first_start = min((o.start_date for o in live), default=None)
     slots = []
     for lo, hi in quarter_slots(start_of("goal", goal), goal.target_date):
         objs = tuple(o for o in live if o.start_date <= hi and o.end_date >= lo)
         current = lo <= today <= hi
-        if not objs:
+        if not objs and first_start and hi < first_start:
+            state = "lead"  # sequenced goal: its first phase is planned to start later
+        elif not objs:
             state = "gap" if hi < today else "unplanned"
         elif all(o.status == "achieved" for o in objs):
             state = "achieved"

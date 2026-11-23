@@ -213,3 +213,17 @@ Tests: `tests/unit/test_cascade.py` (CAS-01..20), `tests/integration/test_upgrad
   **Today** shows the next three deadlines.
 
 Tests: `tests/unit/test_timeline.py` (TML-01..13), `test_int08` (deadline form, refusal without a reason, Timeline page).
+
+---
+
+# Milestone 1.3 — Plan files, running totals, track-only key results
+
+- **Plan importer:** `lifeos import-plan FILE` or the Plan page. All-or-nothing, imported once per name, and it updates existing goals by code. See [plan-files.md](plan-files.md).
+- **`level` key results:** running totals where the latest reading counts (skis ready, cash on hand). No pacing, and they're excluded from weekly hit-rates.
+- **Track-only key results:** no target means the number is recorded and shown but never judged.
+- **Future phases aren't judged:** a key result before its objective starts reads "not started".
+- **Sequenced goals:** quarters before a goal's first planned phase show ⏸️ "before this goal's first phase" rather than "not planned".
+  The "no objective" gap only fires when nothing is planned now *or* later.
+- **Fix:** the dashboard engine cache is keyed by database location.
+
+Tests: `tests/integration/test_plan_import.py` (IMP-01..06), CAS-21..24, TML-14..15, `test_int09`.

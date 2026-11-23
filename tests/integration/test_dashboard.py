@@ -78,3 +78,23 @@ def test_int08_deadline_form_and_timeline(seeded_db):
     at.sidebar.radio[0].set_value("Timeline").run()
     assert not at.exception
     assert any("Tax compliance" in m.value for m in at.markdown)
+
+
+def test_int09_level_and_tracking_key_results_render(seeded_db):
+    import datetime as dt
+    from lifeos.config import get_settings
+    from lifeos.db import make_engine, session_factory, unit_of_work
+    from lifeos.services import cascade as C
+    today = get_settings().today()
+    with unit_of_work(session_factory(make_engine())) as s:
+        o = C.create_objective(s, goal_code="BUS-G001", title="Buy units", start_date=today)
+        lvl = C.create_key_result(s, objective_code=o.code, title="Units ready", cadence="weekly", target=6,
+                                  measure="level", unit="units")
+        C.create_key_result(s, objective_code=o.code, title="Cash added", cadence="weekly", target=None,
+                            measure="manual", unit="USD")
+        C.check_in(s, lvl.code, today, 4)
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    assert not at.exception
+    texts = " ".join(str(p.proto.text) for p in at.get("progress"))
+    assert "4 units (as of" in texts and "of 6 units" in texts and "tracking" in texts

@@ -19,7 +19,7 @@ def make_engine(url: str | None = None) -> Engine:
         @event.listens_for(engine, "connect")
         def _pragmas(dbapi_conn, _):
             dbapi_conn.execute("PRAGMA foreign_keys=ON")  # enforce foreign keys in SQLite
-            if url is None or ":memory:" not in url and url != "sqlite://":
+            if url is None or (":memory:" not in url and url != "sqlite://"):
                 dbapi_conn.execute("PRAGMA journal_mode=WAL")  # readers never block the writer
     return engine
 

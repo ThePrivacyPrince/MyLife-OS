@@ -29,7 +29,9 @@ TIER_LABELS = {
     "key_result": "Key result (daily/weekly)",
 }
 CADENCES = ("daily", "weekly")
-MEASURES = ("completions", "manual")
+MEASURES = ("completions", "manual", "level")
+# completions: linked tasks done this period    manual: amounts entered this period (a flow, e.g. bookings)
+# level: the latest reading counts (a running total, e.g. skis ready, cash on hand)
 
 
 def months_between(a: dt.date, b: dt.date) -> float:
@@ -95,7 +97,7 @@ def periods_in(cadence: str, start: dt.date, end: dt.date) -> list[tuple[dt.date
 class KRStatus:
     actual: Decimal
     target: Decimal
-    status: str  # met | on_track | behind | missed | no_target
+    status: str  # met | on_track | behind | missed | below | no_target (track only) | no_data
 
     @property
     def fraction(self) -> float:
@@ -120,6 +122,15 @@ def kr_status(actual: Decimal, target: Decimal, period: tuple[dt.date, dt.date],
     if days == 1 or actual >= expected:
         return KRStatus(actual, target, "on_track")
     return KRStatus(actual, target, "behind")
+
+
+def level_status(actual: Decimal | None, target: Decimal) -> KRStatus:
+    """Running totals: compare the latest reading with the target. No pacing - a level is where you are."""
+    if actual is None:
+        return KRStatus(Decimal(0), target, "no_data")
+    if target <= 0:
+        return KRStatus(actual, target, "no_target")
+    return KRStatus(actual, target, "met" if actual >= target else "below")
 
 
 def parse_amount(value) -> Decimal:

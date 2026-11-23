@@ -32,10 +32,15 @@ PRIORITY_COLOR = {1: "red", 2: "orange", 3: "gray"}
 
 
 @st.cache_resource
-def _factory():
-    engine = make_engine()
+def _factory_for(url: str):
+    engine = make_engine(url)
     init_db(engine)
     return session_factory(engine)
+
+
+def _factory():
+    """One engine per database location, so switching LIFEOS_DB never reads the wrong file."""
+    return _factory_for(get_settings().database_url)
 
 
 def flash(kind: str, msg: str) -> None:
@@ -402,14 +407,23 @@ def page_all() -> None:
             st.markdown(t.description)
 
 
-STATUS_ICON = {"met": "✅", "on_track": "🟢", "behind": "🟠", "missed": "🔴", "no_target": "⚪"}
+STATUS_ICON = {"met": "✅", "on_track": "🟢", "behind": "🟠", "missed": "🔴", "below": "🔵", "no_target": "📝",
+               "no_data": "⚪", "not_started": "🗓️"}
+STATUS_TEXT = {"met": "met", "on_track": "on track", "behind": "behind pace", "missed": "missed", "below": "not there yet",
+               "no_target": "tracking", "no_data": "no reading yet", "not_started": "not started"}
+
+
+def fmt_amount(value, unit: str = "") -> str:
+    q = f"{value:,.2f}".rstrip("0").rstrip(".")
+    return f"${q}" if unit.upper() in ("USD", "$") else (f"{q} {unit}".strip())
 
 
 CD_ICON = {"on_clock": "⏳", "due_soon": "🟠", "due_today": "🔴", "overdue": "🔴", "not_started": "🗓️",
            "no_deadline": "⚪"}
-SLOT_ICON = {"achieved": "✅", "missed": "❌", "active": "▶️", "planned": "🗓️", "unplanned": "⬜", "gap": "⚠️"}
+SLOT_ICON = {"achieved": "✅", "missed": "❌", "active": "▶️", "planned": "🗓️", "unplanned": "⬜", "gap": "⚠️",
+             "lead": "⏸️"}
 SLOT_TEXT = {"achieved": "achieved", "missed": "missed", "active": "now", "planned": "planned",
-             "unplanned": "not planned yet", "gap": "nothing was planned"}
+             "unplanned": "not planned yet", "gap": "nothing was planned", "lead": "before this goal's first phase"}
 
 
 def countdown_bar(entity: str, row) -> None:
@@ -450,10 +464,42 @@ def goal_timeline_row(g: Goal) -> None:
 
 def kr_row(kr: KeyResult) -> None:
     (lo, hi), status = C.kr_progress(s, kr, day)
-    when = "today" if kr.cadence == "daily" else f"week of {lo:%b %d}"
-    unit = f" {kr.unit}" if kr.unit else ""
-    st.progress(status.fraction, text=f"{STATUS_ICON[status.status]} **{kr.title}** - {status.actual:g}/"
-                                      f"{kr.target:g}{unit} {when} · {status.status.replace('_', ' ')}")
+    icon, word = STATUS_ICON[status.status], STATUS_TEXT[status.status]
+    target = f"target {fmt_amount(kr.target, kr.unit)}" if kr.target > 0 else "track only"
+    if status.status == "not_started":
+        text = f"{icon} **{kr.title}** - {target} · starts {kr.objective.start_date:%b %d}"
+    elif status.status == "no_data":
+        text = f"{icon} **{kr.title}** - {target} · no reading yet"
+    elif kr.measure == "level":
+        value, when = C.kr_latest(kr, day)
+        now = "no reading yet" if value is None else f"{fmt_amount(value, kr.unit)} (as of {when:%b %d})"
+        goal = f" of {fmt_amount(kr.target, kr.unit)}" if kr.target > 0 else ""
+        text = f"{icon} **{kr.title}** - {now}{goal} · {word}"
+    else:
+        period = "today" if kr.cadence == "daily" else f"week of {lo:%b %d}"
+        goal = f" / {fmt_amount(kr.target, kr.unit)}" if kr.target > 0 else (f" {kr.unit}" if kr.unit and kr.unit.upper() != "USD" else "")
+        text = f"{icon} **{kr.title}** - {fmt_amount(status.actual, kr.unit if kr.target > 0 else (kr.unit if kr.unit.upper() == 'USD' else ''))}{goal} {period} · {word}"
+    st.progress(status.fraction, text=text)
+
+
+def do_import() -> None:
+    import yaml
+    from lifeos.services.plan_import import import_plan
+    f = val("plan_file")
+    try:
+        data = yaml.safe_load(f.getvalue().decode("utf-8"))
+    except Exception as exc:  # malformed YAML
+        flash("error", f"Couldn't read that file: {exc}")
+        return
+
+    def run(s):
+        result = import_plan(s, data, day)
+        SS["plan_warnings"] = result["warnings"]
+        SS["import_summary"] = result["summary"]
+    act(run, "Plan imported")
+    if "import_summary" in SS and SS.get("flash", ("",))[0] == "success":
+        sm = SS.pop("import_summary")
+        flash("success", "Plan imported: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in sm.items() if v))
 
 
 def page_plan() -> None:
@@ -485,6 +531,11 @@ def page_plan() -> None:
         if unlinked:
             st.caption(f"{len(unlinked)} open task(s) aren't linked to a key result. Fine for chores; link the ones "
                        "that move a goal (task → More → Link ↑).")
+        with st.expander("📥 Import a plan file"):
+            st.caption("A .yaml plan (vision, goals, objectives, key results, tasks). Imported once, all or nothing. "
+                       "Keep plan files in your data/ folder, never in Git.")
+            st.file_uploader("Plan file", type=["yaml", "yml"], key="plan_file", label_visibility="collapsed")
+            st.button("Import plan", key="plan_import", disabled=val("plan_file") is None, on_click=do_import)
     st.divider()
 
     for pillar in s.scalars(select(Pillar).order_by(Pillar.sort_order)):
@@ -561,17 +612,20 @@ def page_plan() -> None:
         st.text_input("Key result", key="k_t", placeholder="e.g. Tax-paperwork sessions")
         c = st.columns(4)
         c[0].radio("Every", ["weekly", "daily"], key="k_c", horizontal=True)
-        c[1].text_input("Target per period", value="3", key="k_n")
+        c[1].text_input("Target (blank = just track it)", value="", key="k_n")
         c[2].text_input("Unit (optional)", key="k_u", placeholder="sessions, $, pages")
-        c[3].radio("Measured by", ["completions", "manual"], key="k_m",
-                   format_func=lambda m: {"completions": "Linked tasks done", "manual": "Numbers I enter"}[m])
+        c[3].radio("Measured by", ["completions", "manual", "level"], key="k_m",
+                   format_func=lambda m: {"completions": "Linked tasks done", "manual": "Amount I enter each period",
+                                          "level": "Running total (latest reading)"}[m])
         st.form_submit_button("Add key result", type="primary", on_click=act, args=(lambda s: C.create_key_result(
             s, objective_code=val("k_o"), title=val("k_t", ""), cadence=val("k_c"), target=val("k_n", ""),
             unit=val("k_u", ""), measure=val("k_m")), "Key result added"))
-    manual = [kr for kr in C.active_key_results(s, day) if kr.measure == "manual"]
+    manual = [kr for kr in C.active_key_results(s, day) if kr.measure in ("manual", "level")]
     with tc, st.form("f_ci", clear_on_submit=True):
         if not manual:
-            st.caption("Check-ins are for key results measured by numbers you enter (e.g. dollars saved).")
+            st.caption("Check-ins are for key results you enter numbers for. Only key results in an objective "
+                       "that's running today show here.")
+        st.caption("For running totals (skis ready, cash on hand), enter the current total, not the change.")
         st.selectbox("Key result", [kr.code for kr in manual], key="c_k", format_func=_kr_label)
         c = st.columns(2)
         c[0].date_input("Day", value=day, key="c_d")

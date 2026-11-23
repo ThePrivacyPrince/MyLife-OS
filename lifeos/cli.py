@@ -60,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
     p_review = sub.add_parser("review", help="print the end-of-day review")
     p_review.add_argument("--date", type=dt.date.fromisoformat)
     sub.add_parser("dashboard", help="launch the Streamlit dashboard")
+    p_imp = sub.add_parser("import-plan", help="import a plan file (vision, goals, objectives, key results, tasks)")
+    p_imp.add_argument("path", type=Path)
     args = parser.parse_args(argv)
 
     if args.cmd == "dashboard":
@@ -71,11 +73,27 @@ def main(argv: list[str] | None = None) -> int:
     factory = session_factory(engine)
     today = getattr(args, "date", None) or get_settings().today()
 
+    from lifeos.errors import LifeOSError
+    try:
+        return _run(args, factory, today)
+    except LifeOSError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+
+def _run(args, factory, today) -> int:
     with unit_of_work(factory) as s:
         if args.cmd == "init":
             print(f"Database ready at {get_settings().database_url}")
         elif args.cmd == "seed":
             print(f"Seeded: {seed(s, today)}")
+        elif args.cmd == "import-plan":
+            import yaml
+            from lifeos.services.plan_import import import_plan
+            result = import_plan(s, yaml.safe_load(args.path.read_text()), today)
+            print(f"Imported: {result['summary']}")
+            for w in result["warnings"]:
+                print(f"  note: {w}")
         elif args.cmd == "today":
             _print_plan(plan_day(s, today))
         elif args.cmd == "review":

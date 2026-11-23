@@ -124,3 +124,16 @@ def test_tml13_roadmap_is_soonest_first(s, goal, today):
     road = C.upcoming_deadlines(s, today)
     assert [d.code for d in road] == [o.code, goal.code, v.code]
     assert road[0].countdown.days_left == 90
+
+
+def test_tml14_future_phase_is_not_behind(s, goal, today):
+    o = C.create_objective(s, goal_code=goal.code, title="Summer", start_date=today + dt.timedelta(days=30))
+    kr = C.create_key_result(s, objective_code=o.code, title="Bookings", cadence="weekly", target=19)
+    assert C.kr_progress(s, kr, today)[1].status == "not_started"
+
+
+def test_tml15_sequenced_goal_lead_time_is_not_unplanned(s, today):
+    g, _ = C.create_goal(s, pillar="BUS", title="Summer sales", target_date=D(2027, 8, 31), today=today)
+    C.create_objective(s, goal_code=g.code, title="Grow sales", start_date=D(2027, 6, 1), end_date=D(2027, 8, 31))
+    states = [sl.state for sl in C.goal_timeline(g, today)]
+    assert states[0] == "lead" and "unplanned" not in states[:-1]

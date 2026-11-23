@@ -98,7 +98,7 @@ def test_cas08_objective_window_is_about_three_months(s, stack):
                            end_date=MON - dt.timedelta(days=1))
 
 
-@pytest.mark.parametrize("kw", [dict(cadence="monthly"), dict(target=0), dict(target="abc"),
+@pytest.mark.parametrize("kw", [dict(cadence="monthly"), dict(target=-5), dict(target="abc"),
                                 dict(target="NaN"), dict(measure="vibes"), dict(title=" ")])
 def test_cas09_key_result_validation(s, stack, kw):
     obj = stack[2]
@@ -185,7 +185,7 @@ def test_cas17_gaps_point_at_broken_arrows(s, today):
     gaps = C.cascade_gaps(s, today)
     msgs = " | ".join(g.message for g in gaps)
     assert msgs.count("no 3-5 year vision") == 5
-    assert "isn't connected to a vision" in msgs and "no objective for this quarter" in msgs
+    assert "isn't connected to a vision" in msgs and "no objective planned" in msgs
 
 
 def test_cas18_complete_chain_has_no_gaps_for_it(s, mk, stack, today):
@@ -206,3 +206,46 @@ def test_cas20_goal_can_be_relinked_with_audit(s, stack, today):
     v2, _ = C.create_vision(s, pillar="FIN", title="Own my home", target_year=2031, today=today)
     C.link_goal_to_vision(s, goal.code, v2.code, "taxes are a step to a mortgage")
     assert goal.vision.code == v2.code
+
+
+# ---------------------------------------------------------------- level and track-only key results
+def test_cas21_level_kr_uses_latest_reading(s, stack):
+    obj = stack[2]
+    kr = C.create_key_result(s, objective_code=obj.code, title="Skis ready to rent", cadence="weekly", target=6,
+                             measure="level", unit="skis")
+    _, st0 = C.kr_progress(s, kr, MON)
+    assert st0.status == "no_data"
+    C.check_in(s, kr.code, MON, 2)
+    C.check_in(s, kr.code, dt.date(2026, 11, 30), 4)
+    _, st1 = C.kr_progress(s, kr, dt.date(2026, 12, 2))
+    assert (st1.actual, st1.status) == (Decimal(4), "below")
+    _, back = C.kr_progress(s, kr, MON)  # as of an earlier day, the earlier reading applies
+    assert back.actual == 2
+    C.check_in(s, kr.code, dt.date(2026, 12, 3), 6)
+    assert C.kr_progress(s, kr, dt.date(2026, 12, 3))[1].status == "met"
+
+
+def test_cas22_track_only_kr_is_recorded_but_never_judged(s, stack):
+    obj = stack[2]
+    kr = C.create_key_result(s, objective_code=obj.code, title="Operator shifts", cadence="weekly", target=None,
+                             measure="manual")
+    assert kr.target == 0
+    C.check_in(s, kr.code, MON, 2)
+    _, status = C.kr_progress(s, kr, MON)
+    assert (status.actual, status.status) == (Decimal(2), "no_target")
+
+
+def test_cas23_levels_and_track_only_dont_distort_objective_health(s, stack):
+    obj = stack[2]
+    C.create_key_result(s, objective_code=obj.code, title="Skis", cadence="weekly", target=6, measure="level")
+    C.create_key_result(s, objective_code=obj.code, title="Shifts", cadence="weekly", target="", measure="manual")
+    health = C.objective_health(s, obj, dt.date(2026, 12, 1))
+    assert health.total == 2  # only the original weekly completions KR, 2 finished weeks
+
+
+def test_cas24_sequenced_goal_with_future_objective_is_not_a_gap(s, today):
+    g, _ = C.create_goal(s, pillar="BUS", title="Summer sales", target_date=dt.date(2027, 8, 31), today=today)
+    assert any(x.code == g.code and "no objective planned" in x.message for x in C.cascade_gaps(s, today))
+    C.create_objective(s, goal_code=g.code, title="Grow sales", start_date=dt.date(2027, 6, 1),
+                       end_date=dt.date(2027, 8, 31))
+    assert not any(x.code == g.code and "no objective planned" in x.message for x in C.cascade_gaps(s, today))
