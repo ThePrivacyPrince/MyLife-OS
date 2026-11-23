@@ -17,6 +17,8 @@ CONFIG_DIR = REPO_ROOT / "config"
 
 class PlanningSettings(BaseModel):
     discretionary_minutes_per_day: int = Field(180, ge=0)
+    awake_minutes_default: int = Field(960, ge=0, le=1440)
+    buffer_minutes: int = Field(120, ge=0, le=1440)
     default_task_estimate_minutes: int = Field(30, ge=1)
     upcoming_window_days: int = Field(7, ge=1)
     max_backfill_days: int = Field(7, ge=0)

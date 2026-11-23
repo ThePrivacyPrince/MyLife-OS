@@ -337,3 +337,55 @@ class WeeklyReview(Base):
     summary: Mapped[dict] = mapped_column(JSON, default=dict)  # metrics snapshot
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class WeeklyOutcome(Base):
+    """A finish line for the week: something visibly different by Sunday, proven by evidence."""
+
+    __tablename__ = "weekly_outcomes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    week_start: Mapped[dt.date] = mapped_column(Date)  # Monday
+    title: Mapped[str] = mapped_column(String(200))  # the finish line
+    pillar_code: Mapped[str | None] = mapped_column(ForeignKey("pillars.code"))
+    goal_id: Mapped[int | None] = mapped_column(ForeignKey("goals.id"))
+    next_task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"))
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    follow_up_date: Mapped[dt.date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(16), default="open")
+    # open | waiting | achieved | partial | missed | dropped | carried
+    close_note: Mapped[str] = mapped_column(Text, default="")
+    carried_from_id: Mapped[int | None] = mapped_column(ForeignKey("weekly_outcomes.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    next_task: Mapped["Task | None"] = relationship(foreign_keys=[next_task_id])
+    goal: Mapped["Goal | None"] = relationship(foreign_keys=[goal_id])
+
+
+class DailyCheck(Base):
+    """The evening check: three questions that plan tomorrow (progress, one ask, capacity)."""
+
+    __tablename__ = "daily_checks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    for_date: Mapped[dt.date] = mapped_column(Date, unique=True)  # the day being planned
+    # 1. Progress
+    progress_outcome_id: Mapped[int | None] = mapped_column(ForeignKey("weekly_outcomes.id"))
+    progress_task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"))
+    # 2. Negotiation - one ask (lives here, not in the task queue: it's a message, not gated work)
+    no_ask: Mapped[bool] = mapped_column(Boolean, default=False)
+    ask_who: Mapped[str] = mapped_column(String(200), default="")
+    ask_area: Mapped[str] = mapped_column(String(16), default="")  # price | timing | terms | scope
+    ask_what: Mapped[str] = mapped_column(Text, default="")
+    ask_script: Mapped[str] = mapped_column(Text, default="")
+    ask_result: Mapped[str | None] = mapped_column(String(16))  # got | partial | no | not_asked
+    ask_gain: Mapped[str] = mapped_column(Text, default="")
+    ask_result_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    # 3. Capacity
+    protect_note: Mapped[str] = mapped_column(Text, default="")
+    awake_minutes: Mapped[int | None] = mapped_column(Integer)
+    bump_task_ids: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    progress_outcome: Mapped["WeeklyOutcome | None"] = relationship(foreign_keys=[progress_outcome_id])
+    progress_task: Mapped["Task | None"] = relationship(foreign_keys=[progress_task_id])

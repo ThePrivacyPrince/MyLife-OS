@@ -58,8 +58,13 @@ class WeekSummary:
     def kr_scored(self) -> int:
         return sum(1 for _, st in self.key_results if st.status in ("met", "missed", "behind", "on_track", "below"))
 
+    outcomes: dict = field(default_factory=dict)
+    checks: dict = field(default_factory=dict)
+
     def metrics(self) -> dict:
         return {
+            **self.outcomes,
+            **{k: v for k, v in self.checks.items() if k != "gains"},
             "completed": len(self.completed), "slipped": len(self.slipped),
             "p1_done": self.p1_done, "p1_total": self.p1_total,
             "routine_done": self.routine_done, "routine_total": self.routine_total,
@@ -110,6 +115,10 @@ def week_summary(s: Session, start: dt.date, today: dt.date) -> WeekSummary:
         w.key_results.append((kr, C.kr_progress(s, kr, as_of)[1]))
     for b in blocks_between(s, start, end):
         w.minutes_by_kind[b.kind] = w.minutes_by_kind.get(b.kind, 0) + b.minutes
+    from lifeos.services.daily_check import week_check_stats
+    from lifeos.services.outcomes import outcome_stats
+    w.outcomes = outcome_stats(s, start)
+    w.checks = week_check_stats(s, start, today)
     horizon = end + dt.timedelta(days=14)
     w.deadlines_ahead = [d for d in C.upcoming_deadlines(s, today, include_overdue=False) if end < d.date <= horizon]
     return w
@@ -136,6 +145,14 @@ def save_weekly_review(s: Session, start: dt.date, today: dt.date, *, wins: str 
     row.summary = week_summary(s, start, today).metrics()
     s.add(row)
     s.flush()
+    # Next week's top 3 are real outcomes (finish lines), not just text.
+    from lifeos.services.outcomes import add_outcome, outcomes_for_week
+    nxt = start + dt.timedelta(days=7)
+    existing = {o.title.lower() for o in outcomes_for_week(s, nxt)}
+    for title in focus:
+        if title.lower() not in existing and len([o for o in outcomes_for_week(s, nxt)
+                                                  if o.status in ("open", "waiting")]) < 3:
+            add_outcome(s, any_day=nxt, title=title)
     return row
 
 
@@ -161,9 +178,9 @@ def review_due(s: Session, today: dt.date) -> dt.date | None:
 
 
 def current_focus(s: Session, today: dt.date) -> list[str]:
-    """Top 3 set in last week's review (it plans *this* week)."""
-    prev = get_review(s, week_start(today) - dt.timedelta(days=7))
-    return list(prev.focus) if prev and prev.focus else []
+    """This week's outcomes (finish lines) - set at last week's review or added during the week."""
+    from lifeos.services.outcomes import outcomes_for_week
+    return [o.title for o in outcomes_for_week(s, today) if o.status != "dropped"]
 
 
 def history(s: Session, limit: int = 8) -> list[WeeklyReview]:

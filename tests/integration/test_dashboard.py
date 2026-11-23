@@ -164,3 +164,46 @@ def test_int14_edit_routine(seeded_db):
     btn[idx].click().run()
     assert not at.exception
     assert any("Routine updated" in x.value for x in at.success), [e.value for e in at.error]
+
+
+
+def test_int15_outcome_then_evening_check_then_yesterday_card(seeded_db):
+    import datetime as dt
+    from lifeos.config import get_settings
+    from lifeos.db import make_engine, session_factory, unit_of_work
+    from lifeos.services import outcomes as O
+    today = get_settings().today()
+    with unit_of_work(session_factory(make_engine())) as s:
+        O.add_outcome(s, any_day=today, title="First pay date confirmed in writing", pillar="FIN")
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    assert any("First pay date confirmed in writing" in m.value for m in at.markdown)
+    k = str(today + dt.timedelta(days=1))
+    at.text_input(key=f"d_n{k}").set_value("Call RXO payroll about first pay date")
+    at.text_input(key=f"d_w{k}").set_value("VX seller")
+    at.text_input(key=f"d_q{k}").set_value("$300 off with trailer")
+    at.text_area(key=f"d_s{k}").set_value("I can pick it up Saturday with cash. Would you take $4,500?")
+    at.number_input(key=f"d_h{k}").set_value(9.0)
+    [b for b in at.button if b.label == "Save the plan"][0].click().run()
+    assert not at.exception
+    assert any("plan saved" in x.value for x in at.success), [e.value for e in at.error]
+    with unit_of_work(session_factory(make_engine())) as s:
+        from lifeos.services import daily_check as D
+        c = D.get_check(s, today + dt.timedelta(days=1))
+        assert c.progress_task.title == "Call RXO payroll about first pay date"
+        assert c.awake_minutes == 540 and c.ask_area == "price"
+
+
+def test_int16_planner_outcome_manager_and_review_closeout(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Planner").run()
+    at.text_input(key="oa_t").set_value("Stipend amount confirmed in writing")
+    [b for b in at.button if b.label == "Add outcome"][0].click().run()
+    assert any("Outcome added" in x.value for x in at.success), [e.value for e in at.error]
+    at.session_state["pl_view"] = "Weekly review"
+    at.run()
+    assert not at.exception
+    close = [b for b in at.button if b.label == "Close"]
+    close[0].click().run()
+    assert any("needs evidence" in e.value for e in at.error), "achieved without evidence is refused"

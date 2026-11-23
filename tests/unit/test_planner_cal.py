@@ -27,7 +27,7 @@ def test_plr01_week_and_month_helpers():
     assert P.shift_month(dt.date(2026, 12, 15), 1) == dt.date(2027, 1, 15)
 
 
-@pytest.mark.parametrize("kw", [dict(title=" "), dict(kind="party"), dict(start_time=t(10), end_time=t(9)),
+@pytest.mark.parametrize("kw", [dict(title=" "), dict(kind="party"), dict(start_time=t(10), end_time=t(10)),
                                 dict(start_time=t(9)), dict(pillar="NOPE")])
 def test_plr02_event_validation(s, kw):
     base = dict(title="Contracts exam", day=MON, kind="exam")

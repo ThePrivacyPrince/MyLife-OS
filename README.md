@@ -24,6 +24,9 @@ Business · Relationships · Environment · Finances · Education.
   move with a recorded reason, and each goal shows its quarter-by-quarter runway.
 - **Planner:** Agenda / Week / Month views, class schedules, calendar (.ics) import from Canvas or Google,
   "plan the week", and a Sunday weekly review with a scorecard and next week's top 3 ([details](docs/planner.md)).
+- **Weekly outcomes and the evening check:** up to 3 finish lines a week, closed with evidence. Three evening
+  questions (progress, one ask, capacity) plan tomorrow, and capacity follows your real calendar, overnights
+  included ([plan](docs/plan-reviews-decisions.md)).
 - **Edit anything:** one ✏️ form per task or routine. The audit rules still apply, and a reason is asked for
   only where it matters.
 - **Plan files:** load a whole vision-to-tasks plan from YAML in one step ([format](docs/plan-files.md)).

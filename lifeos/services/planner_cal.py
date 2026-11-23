@@ -21,8 +21,8 @@ from lifeos.errors import NotFound, ValidationError
 from lifeos.models import CalendarEvent, EventSeries, Pillar, RecurringTemplate, Task
 from lifeos.services import tasks as T
 
-KINDS = {"class": "🎓", "study": "📚", "work": "💼", "appointment": "📍", "exam": "📝", "deadline": "⏰",
-         "personal": "🙂", "other": "•"}
+KINDS = {"class": "🎓", "study": "📚", "work": "💼", "training": "🏃", "family": "👨‍👧", "appointment": "📍",
+         "exam": "📝", "deadline": "⏰", "personal": "🙂", "other": "•"}
 
 
 # ---------------------------------------------------------------- date helpers (pure)
@@ -51,8 +51,9 @@ def _check(title: str, kind: str, pillar: str | None, s: Session, start, end) ->
         raise ValidationError(f"Unknown pillar '{pillar}'.")
     if (start is None) != (end is None):
         raise ValidationError("Give both a start and end time, or neither (all day).")
-    if start and end and end <= start:
-        raise ValidationError("End time must be after start time.")
+    if start and end and end == start:
+        raise ValidationError("Start and end time are the same.")
+    # end < start means the block runs past midnight (e.g. an 11 pm - 7 am overnight shift)
     return title.strip()
 
 
@@ -137,17 +138,36 @@ class Block:
     task_id: int | None = None
 
     @property
+    def overnight(self) -> bool:
+        return bool(self.start and self.end and self.end < self.start)
+
+    @property
     def minutes(self) -> int:
         if not (self.start and self.end):
             return 0
-        return (dt.datetime.combine(self.day, self.end) - dt.datetime.combine(self.day, self.start)).seconds // 60
+        end_day = self.day + dt.timedelta(days=1) if self.overnight else self.day
+        return int((dt.datetime.combine(end_day, self.end) - dt.datetime.combine(self.day, self.start))
+                   .total_seconds() // 60)
+
+    def minutes_on(self, day: dt.date) -> int:
+        """Minutes of this block that fall on `day` (an overnight block is split at midnight)."""
+        if not (self.start and self.end):
+            return 0
+        midnight = dt.datetime.combine(self.day + dt.timedelta(days=1), dt.time.min)
+        start = dt.datetime.combine(self.day, self.start)
+        if day == self.day:
+            return int(((midnight if self.overnight else start + dt.timedelta(minutes=self.minutes)) - start)
+                       .total_seconds() // 60)
+        if self.overnight and day == self.day + dt.timedelta(days=1):
+            return int((dt.datetime.combine(day, self.end) - midnight).total_seconds() // 60)
+        return 0
 
     @property
     def time_label(self) -> str:
         if not self.start:
             return "All day"
         f = lambda t: t.strftime("%-I:%M %p").replace(":00 ", " ").lower()  # noqa: E731
-        return f"{f(self.start)}-{f(self.end)}"
+        return f"{f(self.start)}-{f(self.end)}" + (" (overnight)" if self.overnight else "")
 
 
 def blocks_between(s: Session, lo: dt.date, hi: dt.date) -> list[Block]:
@@ -170,11 +190,13 @@ class DayAgenda:
 
     @property
     def empty(self) -> bool:
-        return not (self.blocks or self.tasks or self.routines or self.deadlines)
+        return not (self.blocks or self.carry_in or self.tasks or self.routines or self.deadlines)
+
+    carry_in: list = field(default_factory=list)  # overnight blocks from the night before
 
     @property
     def booked_minutes(self) -> int:
-        return sum(b.minutes for b in self.blocks)
+        return sum(b.minutes_on(self.day) for b in self.blocks + self.carry_in)
 
 
 def agenda(s: Session, start: dt.date, days: int, today: dt.date) -> list[DayAgenda]:
@@ -182,8 +204,12 @@ def agenda(s: Session, start: dt.date, days: int, today: dt.date) -> list[DayAge
     end = start + dt.timedelta(days=days - 1)
     settings = get_settings()
     out = {start + dt.timedelta(days=i): DayAgenda(start + dt.timedelta(days=i)) for i in range(days)}
-    for b in blocks_between(s, start, end):
-        out[b.day].blocks.append(b)
+    for b in blocks_between(s, start - dt.timedelta(days=1), end):
+        if b.day in out:
+            out[b.day].blocks.append(b)
+        nxt = b.day + dt.timedelta(days=1)
+        if b.overnight and nxt in out:
+            out[nxt].carry_in.append(b)
     for t in s.scalars(select(Task)):
         if t.status == S.COMPLETED and t.completed_at:
             d = settings.local_date(t.completed_at)
@@ -228,3 +254,35 @@ def plan_task_on(s: Session, task_id: int, day: dt.date, today: dt.date, reason:
     old = task.scheduled_date
     slipping = old is not None and old <= today and day > old
     return T.reschedule(s, task_id, day, reason, today=today, planned=not slipping)
+
+
+# ---------------------------------------------------------------- capacity
+@dataclass(frozen=True)
+class Capacity:
+    day: dt.date
+    awake: int
+    awake_overridden: bool
+    booked: int
+    buffer: int
+    cap: int
+
+    @property
+    def free(self) -> int:
+        return max(0, self.awake - self.booked - self.buffer)
+
+    @property
+    def available(self) -> int:
+        """Realistic minutes for P1/P2 work: what's left after the calendar, capped at what you'd really do."""
+        return min(self.cap, self.free)
+
+
+def capacity_for(s: Session, day: dt.date) -> Capacity:
+    from lifeos.models import DailyCheck
+    cfg = get_settings().planning
+    check = s.scalar(select(DailyCheck).where(DailyCheck.for_date == day))
+    awake = check.awake_minutes if check and check.awake_minutes is not None else cfg.awake_minutes_default
+    booked = 0
+    for b in blocks_between(s, day - dt.timedelta(days=1), day):
+        booked += b.minutes_on(day)
+    return Capacity(day, awake, bool(check and check.awake_minutes is not None), booked, cfg.buffer_minutes,
+                    cfg.discretionary_minutes_per_day)

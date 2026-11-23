@@ -116,12 +116,15 @@ def plan_day(s: Session, today: dt.date | None = None) -> DayPlan:
     committed_tasks = queue[1] + queue[2]
     unestimated = sum(1 for p in committed_tasks if not p.task.estimated_minutes)
     committed = sum(p.task.estimated_minutes or default_est for p in committed_tasks)
-    capacity = settings.planning.discretionary_minutes_per_day
+    from lifeos.services.planner_cal import capacity_for
+    cap = capacity_for(s, today)
+    capacity = cap.available
 
     warnings: list[str] = []
     if committed > capacity:
         warnings.append(
-            f"Overcommitted: P1+P2 work is about {committed} min against {capacity} min of realistic capacity. "
+            f"Overcommitted: P1+P2 work is about {committed} min against {capacity} min of realistic capacity "
+            f"(awake {cap.awake // 60}h - calendar {cap.booked / 60:.1f}h - buffer {cap.buffer // 60}h). "
             "Defer some P2 items (with a reason) rather than silently letting them slip."
         )
     if unestimated:

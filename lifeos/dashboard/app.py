@@ -23,6 +23,8 @@ from lifeos.models import Goal, KeyResult, Objective, Pillar, RecurringTemplate,
 from lifeos.services import cascade as C
 from lifeos.services import planner_cal as P
 from lifeos.services import task_edit as E
+from lifeos.services import daily_check as D
+from lifeos.services import outcomes as O
 from lifeos.services import weekly as W
 from lifeos.services import recurring as R
 from lifeos.services import tasks as T
@@ -305,6 +307,209 @@ def task_actions(t: Task, k: str, gated: bool) -> None:
 
 
 
+# ================================================================== Outcomes + daily check
+OUT_ICON = {"open": "🎯", "waiting": "⏳", "achieved": "✅", "partial": "◐", "missed": "✗", "dropped": "—",
+            "carried": "↪️"}
+AREA_TEXT = {"price": "💲 price", "timing": "🕒 timing", "terms": "📄 terms", "scope": "📐 scope"}
+
+
+def _open_task_options(include: int | None = None) -> list[int]:
+    rows = s.scalars(select(Task).where(Task.status.in_(["pending", "in_progress", "waiting", "blocked"]),
+                                        Task.protected.is_(False)))
+    ids = [x.id for x in sorted(rows, key=lambda x: (x.priority, x.due_date or dt.date.max, x.id))]
+    if include and include not in ids:
+        ids.insert(0, include)
+    return ids
+
+
+def _task_label(i: int | None) -> str:
+    if i is None:
+        return "-"
+    x = s.get(Task, i)
+    return f"#{x.id} {x.title} · P{x.priority}" if x else f"#{i}"
+
+
+def outcome_line(o) -> str:
+    nt = o.next_task
+    nxt = ""
+    if nt:
+        nxt = f" · next: {'✅ ' if nt.status == S.COMPLETED else ''}{nt.title}"
+        if nt.scheduled_date and nt.status != S.COMPLETED:
+            nxt += f" ({nt.scheduled_date:%a})"
+    wait = f" · ⏳ follow up {o.follow_up_date:%a %b} {o.follow_up_date.day}" if o.status == "waiting" else ""
+    streak = O.carry_streak(s, o)
+    carried = f" · :orange[carried {streak}×]" if streak else ""
+    return f"{OUT_ICON[o.status]} **{o.title}**:gray[{nxt}{wait}]{carried}"
+
+
+def outcomes_strip(where: str) -> None:
+    outs = O.outcomes_for_week(s, day)
+    if not outs:
+        st.caption("🎯 No outcomes for this week yet - set up to three finish lines in **Planner → This week's outcomes**.")
+        return
+    st.markdown("**🎯 This week's outcomes**")
+    for o in outs:
+        st.markdown(outcome_line(o))
+        if O.carry_streak(s, o) >= 2 and where == "today":
+            st.caption("Carried 2+ weeks - is the finish line too big, or blocked by something not written down?")
+
+
+def outcome_manager() -> None:
+    week = P.week_start(_pl_anchor())
+    outs = O.outcomes_for_week(s, week)
+    live = [o for o in outs if o.status in O.OPEN]
+    with st.expander(f"🎯 This week's outcomes ({len(live)}/{O.MAX_OUTCOMES})", expanded=not outs):
+        st.caption("Finish lines for the week: something visibly different by Sunday. Habits belong in Recurring.")
+        for o in outs:
+            r = st.columns([0.8, 0.2])
+            r[0].markdown(outcome_line(o))
+            if o.status not in O.OPEN:
+                if o.close_note or o.evidence:
+                    r[0].caption(o.evidence or o.close_note)
+                continue
+            k = f"oc{o.id}"
+            with r[1].popover("Manage"):
+                with st.form(f"of{k}"):
+                    st.text_input("Finish line", value=o.title, key=f"ot{k}")
+                    opts = [None] + _open_task_options(o.next_task_id)
+                    st.selectbox("Next task", opts, index=opts.index(o.next_task_id) if o.next_task_id in opts else 0,
+                                 key=f"on{k}", format_func=_task_label)
+                    st.text_area("Evidence (what proves it's done?)", value=o.evidence or "", key=f"oe{k}", height=70)
+                    st.checkbox("Waiting on someone", value=o.status == "waiting", key=f"ow{k}")
+                    st.date_input("Follow up on", value=o.follow_up_date or day + dt.timedelta(days=2), key=f"of{k}d")
+                    st.form_submit_button("Save", type="primary", on_click=act, args=(
+                        lambda s, i=o.id: O.update_outcome(
+                            s, i, title=val(f"ot{k}"), next_task_id=val(f"on{k}"), evidence=val(f"oe{k}", ""),
+                            waiting_until=val(f"of{k}d") if val(f"ow{k}") else None, today=day), "Outcome updated"))
+                st.markdown("**Close it**")
+                st.selectbox("As", ["achieved", "partial", "missed", "dropped"], key=f"os{k}")
+                st.text_input("Note (evidence if achieved; what happened otherwise)", key=f"oz{k}")
+                c = st.columns(2)
+                c[0].button("Close", key=f"oc{k}b", on_click=act, args=(
+                    lambda s, i=o.id: O.close_outcome(s, i, val(f"os{k}"), val(f"oz{k}", "")), "Outcome closed"))
+                c[1].button("Carry to next week", key=f"ocr{k}", on_click=act, args=(
+                    lambda s, i=o.id: O.carry_outcome(s, i, val(f"oz{k}", "")), "Carried to next week"))
+        if len(live) < O.MAX_OUTCOMES:
+            with st.form(f"oadd{week}", clear_on_submit=True):
+                c = st.columns([3, 1, 2])
+                c[0].text_input("New finish line", key="oa_t",
+                                placeholder="e.g. First RXO pay date confirmed in writing")
+                c[1].selectbox("Pillar", [None] + _pillar_options(), key="oa_p",
+                               format_func=lambda x: "-" if x is None else f"{ICON[x]} {x}")
+                opts = [None] + _open_task_options()
+                c[2].selectbox("Next task", opts, key="oa_n", format_func=_task_label)
+                st.form_submit_button("Add outcome", on_click=act, args=(lambda s: O.add_outcome(
+                    s, any_day=week, title=val("oa_t", ""), pillar=val("oa_p"), next_task_id=val("oa_n")),
+                    "Outcome added"))
+
+
+def yesterday_card(plan) -> None:
+    c = D.get_check(s, day)
+    if c is None:
+        if D.missed_twice(s, day):
+            st.info("🌙 Two days without the evening check - never miss twice. It takes 3 minutes (below).")
+        return
+    with st.container(border=True):
+        st.markdown("**🧭 Yesterday-you decided**")
+        if c.progress_task:
+            tk = c.progress_task
+            done = "✅ " if tk.status == S.COMPLETED else ""
+            out = f" · ↑ moves: _{c.progress_outcome.title}_" if c.progress_outcome else ""
+            st.markdown(f"**1. Progress:** {done}{tk.title}{out}")
+        else:
+            st.markdown("**1. Progress:** :gray[no action picked]")
+        if c.no_ask or not c.ask_what:
+            st.markdown("**2. Ask:** :gray[nothing worth asking today]")
+        else:
+            st.markdown(f"**2. Ask {c.ask_who}** for better {AREA_TEXT.get(c.ask_area, c.ask_area)}: {c.ask_what}")
+            with st.expander("What you'll say"):
+                st.markdown(c.ask_script)
+            if c.ask_result:
+                res = {"got": "✅ got it", "partial": "◐ partly", "no": "✗ no", "not_asked": "— didn't ask"}[c.ask_result]
+                st.caption(f"Result: {res}" + (f" · {c.ask_gain}" if c.ask_gain else ""))
+            else:
+                r = st.columns([2.2, 0.8, 0.8, 0.8, 1])
+                r[0].text_input("What you got", key=f"ag{day}", label_visibility="collapsed",
+                                placeholder="What did you get? e.g. $300 off")
+                for col, (res, label) in zip(r[1:], [("got", "Got it"), ("partial", "Partly"), ("no", "No"),
+                                                     ("not_asked", "Didn't ask")]):
+                    col.button(label, key=f"ar{res}{day}", on_click=act, args=(
+                        lambda s, rr=res: D.record_ask(s, day, rr, val(f"ag{day}", "")), "Ask recorded"))
+        cap = P.capacity_for(s, day)
+        prot = f" · protect: {c.protect_note}" if c.protect_note else ""
+        st.markdown(f"**3. Capacity:** about {cap.available} min for P1/P2 "
+                    f":gray[(awake {cap.awake / 60:.0f}h - calendar {cap.booked / 60:.1f}h - buffer {cap.buffer // 60}h)]{prot}")
+        if c.bump_task_ids:
+            names = [s.get(Task, i).title for i in c.bump_task_ids if s.get(Task, i)]
+            st.caption("Moves first if the day is full: " + " · ".join(names))
+            if plan.overcommitted:
+                st.warning("The day is full - move the tasks you pre-decided?")
+                st.button("Move them to tomorrow", key="bumpgo", on_click=act, args=(
+                    lambda s: D.move_bumped(s, day, today=day), "Moved as pre-decided"))
+
+
+def daily_check_form() -> None:
+    choice = st.radio("Plan for", ["Tomorrow", "Today"], horizontal=True, key="dck_for",
+                      help="With overnights, 'today' may be the right day if you're planning after waking up.")
+    for_date = day + dt.timedelta(days=1) if choice == "Tomorrow" else day
+    ex = D.get_check(s, for_date)
+    outs = [o for o in O.outcomes_for_week(s, for_date) if o.status in O.OPEN]
+    k = f"{for_date}"
+    with st.form(f"dck{k}"):
+        st.markdown(f"**1. Progress** - What's one action {choice.lower()} that moves a weekly outcome?")
+        if outs:
+            ids = [o.id for o in outs]
+            cur_o = ex.progress_outcome_id if ex and ex.progress_outcome_id in ids else ids[0]
+            c = st.columns(2)
+            c[0].selectbox("Outcome", ids, index=ids.index(cur_o), key=f"d_o{k}",
+                           format_func=lambda i: next(o.title for o in outs if o.id == i))
+            topts = [None] + _open_task_options(ex.progress_task_id if ex else None)
+            cur_t = ex.progress_task_id if ex and ex.progress_task_id in topts else None
+            c[1].selectbox("Existing task", topts, index=topts.index(cur_t), key=f"d_t{k}", format_func=_task_label)
+            st.text_input("…or a new task", key=f"d_n{k}", placeholder="e.g. Email Don Bosco AD about winter stipend")
+        else:
+            st.caption("No open outcomes this week - add them under **Planner → This week's outcomes**.")
+        st.markdown("**2. Negotiation** - What's one thing I can ask for that would improve the price, timing, terms "
+                    "or scope? Who will I ask, and what exactly will I say?")
+        st.checkbox("Nothing worth asking", value=bool(ex and ex.no_ask), key=f"d_x{k}")
+        c = st.columns([2, 1])
+        c[0].text_input("Who", value=ex.ask_who if ex else "", key=f"d_w{k}", placeholder="e.g. VX seller on Marketplace")
+        areas = list(D.ASK_AREAS)
+        c[1].selectbox("Improves", areas, index=areas.index(ex.ask_area) if ex and ex.ask_area in areas else 0,
+                       key=f"d_a{k}", format_func=lambda a: AREA_TEXT[a])
+        st.text_input("What you're asking for", value=ex.ask_what if ex else "", key=f"d_q{k}",
+                      placeholder="e.g. $4,200 with the trailer instead of $4,800")
+        st.text_area("Exactly what you'll say", value=ex.ask_script if ex else "", key=f"d_s{k}", height=80,
+                     placeholder="e.g. I can pick it up Saturday morning with cash. Would you take $4,200 with the trailer?")
+        st.markdown("**3. Capacity** - What do I need to protect, and what moves if the day is full?")
+        blocks = [b for b in P.blocks_between(s, for_date - dt.timedelta(days=1), for_date)
+                  if b.day == for_date or (b.overnight and b.day == for_date - dt.timedelta(days=1))]
+        if blocks:
+            st.caption("On the calendar: " + " · ".join(
+                f"{P.KINDS.get(b.kind, '•')} {b.time_label} {b.title}" + (" (from the night before)" if b.day != for_date else "")
+                for b in blocks))
+        cap = P.capacity_for(s, for_date)
+        c = st.columns([1, 3])
+        c[0].number_input("Awake hours", min_value=0.0, max_value=24.0, step=0.5, value=round(cap.awake / 60, 1),
+                          key=f"d_h{k}", help="Overnights and practice days vary - set it for that day.")
+        c[1].text_input("Protect", value=ex.protect_note if ex else "", key=f"d_p{k}",
+                        placeholder="e.g. Sleep 8a-3p after the overnight · time with Amari 5-7 · track 3:30-5:30")
+        cands = D.tasks_on(s, for_date)
+        st.multiselect("Moves first if the day is full", [x.id for x in cands],
+                       default=[i for i in (ex.bump_task_ids if ex else []) if i in {x.id for x in cands}],
+                       key=f"d_b{k}", format_func=_task_label)
+        st.form_submit_button("Save the plan", type="primary", on_click=act, args=(lambda s: D.save_check(
+            s, for_date=for_date, today=day,
+            outcome_id=val(f"d_o{k}") if outs and (val(f"d_t{k}") or (val(f"d_n{k}") or "").strip()) else None,
+            task_id=val(f"d_t{k}"), new_task_title=val(f"d_n{k}", "") or "",
+            no_ask=val(f"d_x{k}", False), ask_who=val(f"d_w{k}", ""),
+            ask_area=val(f"d_a{k}") if (val(f"d_w{k}") or val(f"d_q{k}") or val(f"d_s{k}")) else "",
+            ask_what=val(f"d_q{k}", ""), ask_script=val(f"d_s{k}", ""), protect_note=val(f"d_p{k}", ""),
+            awake_hours=val(f"d_h{k}"), bump_task_ids=val(f"d_b{k}", [])), f"{choice}'s plan saved 🌙"))
+    if ex:
+        st.caption("Saved already - saving again updates it.")
+
+
 # ================================================================== Planner
 PL_VIEWS = ["Agenda", "Week", "Month", "Weekly review"]
 
@@ -354,6 +559,9 @@ def agenda_day(a) -> None:
     if a.empty:
         st.caption("Nothing planned today" if a.day == day else "Nothing planned")
         return
+    for b in a.carry_in:
+        end = b.end.strftime("%-I:%M %p").replace(":00 ", " ").lower()
+        st.markdown(f"{P.KINDS.get(b.kind, '•')} **until {end}** &nbsp; {b.title} :gray[· from last night]")
     for b in a.blocks:
         where = f" · {b.location}" if b.location else ""
         st.markdown(f"{P.KINDS.get(b.kind, '•')} **{b.time_label}** &nbsp; {b.title}:gray[{where}]")
@@ -486,8 +694,32 @@ def planner_weekly_review() -> None:
     hrs = w.metrics()
     c[4].metric("Class + study", f"{hrs['class_hours'] + hrs['study_hours']:.1f} h",
                 help=f"Class {hrs['class_hours']} h · study {hrs['study_hours']} h (from the calendar)")
+    oc, ck = w.outcomes, w.checks
+    c = st.columns(3)
+    c[0].metric("Outcomes achieved", f"{oc.get('outcomes_achieved', 0)}/{oc.get('outcomes_total', 0)}"
+                if oc.get("outcomes_total") else "n/a",
+                help=f"partial {oc.get('outcomes_partial', 0)} · carried {oc.get('outcomes_carried', 0)}")
+    c[1].metric("Evening checks", f"{ck.get('checks_done', 0)}/{ck.get('checks_possible', 0)}")
+    c[2].metric("Asks", f"{ck.get('asks_got', 0)} won · {ck.get('asks_partial', 0)} partly",
+                help=f"planned {ck.get('asks_planned', 0)} · no {ck.get('asks_no', 0)} · didn't ask {ck.get('asks_skipped', 0)}")
+    if ck.get("gains"):
+        st.caption("💲 What your asks got you: " + " · ".join(ck["gains"]))
     if w.rescheduled or w.overrides:
         st.caption(f"Rescheduled {w.rescheduled}× · priority overrides {w.overrides}×")
+    open_outs = [o for o in O.outcomes_for_week(s, start) if o.status in O.OPEN]
+    if open_outs:
+        st.markdown("**🎯 Close out this week's outcomes** - nothing rolls over silently")
+        for o in open_outs:
+            r = st.columns([3, 1.3, 2, 0.9, 1.1])
+            r[0].markdown(outcome_line(o))
+            r[1].selectbox("As", ["achieved", "partial", "missed", "dropped"], key=f"wo_s{o.id}",
+                           label_visibility="collapsed")
+            r[2].text_input("Note", key=f"wo_n{o.id}", label_visibility="collapsed",
+                            placeholder="evidence / what happened")
+            r[3].button("Close", key=f"wo_c{o.id}", on_click=act, args=(
+                lambda s, i=o.id: O.close_outcome(s, i, val(f"wo_s{i}"), val(f"wo_n{i}", "")), "Outcome closed"))
+            r[4].button("Carry →", key=f"wo_r{o.id}", on_click=act, args=(
+                lambda s, i=o.id: O.carry_outcome(s, i, val(f"wo_n{i}", "")), "Carried to next week"))
 
     left, right = st.columns(2)
     with left:
@@ -527,7 +759,7 @@ def planner_weekly_review() -> None:
         st.select_slider("Energy this week", options=[1, 2, 3, 4, 5], key=f"wr_e{start}",
                          value=(existing.energy if existing and existing.energy else 3),
                          format_func=lambda n: {1: "1 😫", 2: "2 😕", 3: "3 😐", 4: "4 🙂", 5: "5 🔥"}[n])
-        st.markdown("**Next week's top 3** - the outcomes that would make next week a win")
+        st.markdown("**Next week's outcomes** - up to 3 finish lines: what will be visibly different by next Sunday?")
         f = st.columns(3)
         for i in range(3):
             f[i].text_input(f"#{i + 1}", value=focus[i] if i < len(focus) else "", key=f"wr_f{i}{start}")
@@ -661,9 +893,8 @@ def page_planner() -> None:
     if due and v != "Weekly review":
         st.info(f"🗓️ Weekly review time - week of {due:%b} {due.day}.", icon="🔥")
         st.button("Start weekly review", key="pl_wr", on_click=go_weekly_review, args=(due,))
-    focus = W.current_focus(s, day)
-    if focus and v in ("Agenda", "Week"):
-        st.markdown("**This week's top 3:** " + " · ".join(f"**{i}.** {f}" for i, f in enumerate(focus, 1)))
+    if v in ("Agenda", "Week"):
+        outcome_manager()
     {"Agenda": planner_agenda, "Week": planner_week, "Month": planner_month,
      "Weekly review": planner_weekly_review}[_pl_view()]()
     planner_add_section()
@@ -691,9 +922,10 @@ def page_today() -> None:
     if due:
         st.info(f"🗓️ End of the week - time for your weekly review (week of {due:%b} {due.day}).", icon="🔥")
         st.button("Start weekly review", key="td_wr", on_click=go_weekly_review, args=(due,))
-    focus = W.current_focus(s, day)
-    if focus:
-        st.markdown("**This week's top 3:** " + " · ".join(f"**{i}.** {f}" for i, f in enumerate(focus, 1)))
+    yesterday_card(plan)
+    outcomes_strip("today")
+    if D.check_due(s, day):
+        st.caption("🌙 Tomorrow isn't planned yet - the evening check is at the bottom of this page.")
     today_blocks = P.blocks_between(s, day, day)
     if today_blocks:
         st.caption("📅 Schedule: " + " · ".join(f"{P.KINDS.get(b.kind, '•')} {b.time_label} {b.title}"
@@ -742,6 +974,9 @@ def page_today() -> None:
                 st.markdown(f"- {t.effective_date:%a %b %d} · :{PRIORITY_COLOR[t.priority]}[P{t.priority}] "
                             f"{ICON.get(t.pillar_code, '')} {t.title}")
         st.caption("Want to get ahead? Open a task in **All tasks** and start it - the priority gate still applies.")
+    st.divider()
+    with st.expander("🌙 Evening check - plan tomorrow in 3 questions", expanded=D.check_due(s, day)):
+        daily_check_form()
 
 
 def _kr_options() -> list[str | None]:
