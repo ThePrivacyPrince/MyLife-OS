@@ -32,6 +32,8 @@ Business · Relationships · Environment · Finances · Education.
   ([details](docs/money.md)).
 - **Deals:** a used-equipment pipeline with risk flags, an inspection checklist, seven purchase gates, ranking,
   and fleet tracking. Purchases never touch protected reserves ([details](docs/deals.md)).
+- **Personal University:** 8 departments, Rule-of-One semesters, research-backed courses, flashcards with spaced
+  review, earned mastery, history inquiries, exams and hands-on skills ([details](docs/university.md)).
 - **Tasks by pillar:** All tasks opens grouped by pillar, then overdue / this week / later / no date / waiting,
   with a side-by-side Board view.
 - **Edit anything:** one ✏️ form per task or routine. The audit rules still apply, and a reason is asked for
@@ -72,5 +74,5 @@ docs/              milestone designs and acceptance matrices
 2. Financial recovery: accounts, obligations, buckets, forecasts, FIN-C001..C010 controls
 3. Five-Pillar reporting
 4. AI Life Assurance Agent (works inside the controls, never around them)
-5. Jet Life acquisition intelligence (✅ Deals) + Personal University
+5. ✅ Jet Life acquisition intelligence (Deals) + Personal University
 6. Continuous assurance and optimization

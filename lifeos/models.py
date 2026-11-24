@@ -504,3 +504,105 @@ class CandidatePrice(Base):
     note: Mapped[str] = mapped_column(Text, default="")
 
     candidate: Mapped[AcquisitionCandidate] = relationship(back_populates="price_history")
+
+
+# ---------------------------------------------------------------- Personal University (progress only - content is YAML)
+class UnitProgress(Base):
+    __tablename__ = "uni_unit_progress"
+    unit_key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    started_on: Mapped[dt.date | None] = mapped_column(Date)
+    recall_text: Mapped[str] = mapped_column(Text, default="")
+    recall_hits: Mapped[list] = mapped_column(JSON, default=list)
+    recall_on: Mapped[dt.date | None] = mapped_column(Date)
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    evidence_runs: Mapped[bool] = mapped_column(Boolean, default=False)
+    applied_on: Mapped[dt.date | None] = mapped_column(Date)
+
+
+class QuizAttempt(Base):
+    __tablename__ = "uni_quiz_attempts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    unit_key: Mapped[str] = mapped_column(String(40))
+    q_index: Mapped[int] = mapped_column(Integer)
+    day: Mapped[dt.date] = mapped_column(Date)
+    correct: Mapped[bool] = mapped_column(Boolean)
+    answer: Mapped[str] = mapped_column(Text, default="")
+
+
+class CardState(Base):
+    __tablename__ = "uni_card_state"
+    card_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    unit_key: Mapped[str] = mapped_column(String(40))
+    box: Mapped[int] = mapped_column(Integer, default=0)
+    due: Mapped[dt.date] = mapped_column(Date)
+    reviews: Mapped[int] = mapped_column(Integer, default=0)
+    lapses: Mapped[int] = mapped_column(Integer, default=0)
+    last_reviewed: Mapped[dt.date | None] = mapped_column(Date)
+
+
+class CardReview(Base):
+    __tablename__ = "uni_card_reviews"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    card_key: Mapped[str] = mapped_column(String(200))
+    unit_key: Mapped[str] = mapped_column(String(40))
+    day: Mapped[dt.date] = mapped_column(Date)
+    correct: Mapped[bool] = mapped_column(Boolean)
+
+
+class SourceCheck(Base):
+    __tablename__ = "uni_source_checks"
+    source_key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    checked_on: Mapped[dt.date] = mapped_column(Date)
+    note: Mapped[str] = mapped_column(Text, default="")
+
+
+class ReadingEntry(Base):
+    __tablename__ = "uni_reading_log"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_key: Mapped[str | None] = mapped_column(String(60))
+    title: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(12), default="reading")  # reading | done
+    takeaways: Mapped[list] = mapped_column(JSON, default=list)
+    action: Mapped[str] = mapped_column(Text, default="")
+    started_on: Mapped[dt.date] = mapped_column(Date)
+    finished_on: Mapped[dt.date | None] = mapped_column(Date)
+
+
+class Inquiry(Base):
+    __tablename__ = "uni_inquiries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    seed_key: Mapped[str | None] = mapped_column(String(40), unique=True)
+    topic: Mapped[str] = mapped_column(String(160))
+    question: Mapped[str] = mapped_column(Text)
+    sources_used: Mapped[str] = mapped_column(Text, default="")
+    conclusion: Mapped[str] = mapped_column(Text, default="")
+    would_change_mind: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(12), default="open")  # open | concluded
+    created_on: Mapped[dt.date] = mapped_column(Date)
+    concluded_on: Mapped[dt.date | None] = mapped_column(Date)
+
+
+class ExamPlan(Base):
+    __tablename__ = "uni_exam_plans"
+    code: Mapped[str] = mapped_column(String(20), primary_key=True)
+    test_date: Mapped[dt.date | None] = mapped_column(Date)
+    target_score: Mapped[str] = mapped_column(String(40), default="")
+
+
+class PracticeScore(Base):
+    __tablename__ = "uni_practice_scores"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    exam_code: Mapped[str] = mapped_column(String(20))
+    day: Mapped[dt.date] = mapped_column(Date)
+    score: Mapped[Decimal] = mapped_column(DecimalText)
+    max_score: Mapped[Decimal | None] = mapped_column(DecimalText)
+    note: Mapped[str] = mapped_column(Text, default="")
+
+
+class HandsOnRun(Base):
+    __tablename__ = "uni_hands_on"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    checklist_key: Mapped[str] = mapped_column(String(40))
+    day: Mapped[dt.date] = mapped_column(Date)
+    steps_done: Mapped[list] = mapped_column(JSON, default=list)
+    evidence: Mapped[str] = mapped_column(Text, default="")

@@ -1,0 +1,43 @@
+# Hands-on checklists - done when needed, with evidence (photos/notes). Always follow manufacturer instructions.
+checklists:
+  - key: LIFE101-PAINT
+    course: LIFE101
+    title: "Paint a room"
+    sources: [thisoldhouse]
+    safety: "Ventilate the room; use a stable ladder; read the paint can's safety and dry-time instructions."
+    steps:
+      - Measure walls and buy paint (check the can for coverage per gallon), primer if needed, tape, drop cloths, roller, brush
+      - Move furniture to the middle and cover it; cover floors
+      - Remove outlet and switch covers (keep screws in a bag)
+      - Clean walls; fill holes with spackle, let dry, sand smooth
+      - Tape trim and edges
+      - Prime patched spots or stains
+      - Cut in edges with a brush
+      - Roll walls in sections, keeping a wet edge
+      - Let it dry per the can; apply a second coat
+      - Remove tape while the paint is slightly tacky; reinstall covers; clean tools
+  - key: WAVE101-PRERIDE
+    course: WAVE101
+    title: "WaveRunner pre-ride check"
+    sources: [yamaha_manual]
+    safety: "Follow your owner's manual for your exact model and year - it overrides this list."
+    steps:
+      - Hull and intake grate free of damage and debris
+      - Drain plugs installed
+      - Fuel and oil levels per manual
+      - Battery secure and charged; no loose connections
+      - Steering and throttle move freely and return
+      - Engine shut-off cord (lanyard) and safety equipment on board
+      - Start briefly per manual; check the cooling water outlet stream
+  - key: WAVE101-POSTRIDE
+    course: WAVE101
+    title: "WaveRunner after-ride flush and storage check"
+    sources: [yamaha_manual]
+    safety: "Flushing and storage procedures are model-specific - follow your manual's exact steps."
+    steps:
+      - Rinse the hull and pump area with fresh water
+      - Flush the cooling system per your manual's procedure
+      - Dry the engine compartment; check for water, fuel or oil
+      - Check the impeller area and intake grate for damage
+      - Log hours and anything unusual in the ski's maintenance notes
+      - Before long storage, follow the manual's storage steps (fuel, battery, cover)

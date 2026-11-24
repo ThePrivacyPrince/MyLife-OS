@@ -1,0 +1,148 @@
+# Library. Only sources known to exist. Papers are cited (authors, year, title, venue) without guessed links -
+# find them on Google Scholar or your library. Web links are limited to official, stable domains (tested).
+# level: intro | core | advanced | research
+sources:
+  # ---------------- Money & Ownership
+  - {key: shah2012, type: paper, level: research, authors: "Shah, A. K., Mullainathan, S., & Shafir, E.", year: 2012,
+     title: "Some Consequences of Having Too Little", venue: "Science, 338(6107)",
+     why: "Scarcity changes where attention goes - why money stress makes planning harder, and how systems help."}
+  - {key: lusardi2014, type: paper, level: research, authors: "Lusardi, A., & Mitchell, O. S.", year: 2014,
+     title: "The Economic Importance of Financial Literacy: Theory and Evidence", venue: "Journal of Economic Literature, 52(1)",
+     why: "The research case that financial knowledge changes outcomes."}
+  - {key: thaler2004, type: paper, level: research, authors: "Thaler, R. H., & Benartzi, S.", year: 2004,
+     title: "Save More Tomorrow: Using Behavioral Economics to Increase Employee Saving", venue: "Journal of Political Economy, 112(S1)",
+     why: "Automatic, pre-committed saving beats willpower - the idea behind the paycheck split."}
+  - {key: amar2011, type: paper, level: research, authors: "Amar, M., Ariely, D., Ayal, S., Cryder, C. E., & Rick, S. I.", year: 2011,
+     title: "Winning the Battle but Losing the War: The Psychology of Debt Management", venue: "Journal of Marketing Research, 48(SPL)",
+     why: "Why people close small debts first even when it costs more - and when that matters."}
+  - {key: gathergood2019, type: paper, level: research, authors: "Gathergood, J., Mahoney, N., Stewart, N., & Weber, J.", year: 2019,
+     title: "How Do Individuals Repay Their Debt? The Balance-Matching Heuristic", venue: "American Economic Review, 109(3)",
+     why: "Real repayment data: most people don't pay the highest-interest card first."}
+  - {key: kahneman1979, type: paper, level: research, authors: "Kahneman, D., & Tversky, A.", year: 1979,
+     title: "Prospect Theory: An Analysis of Decision under Risk", venue: "Econometrica, 47(2)",
+     why: "Losses hurt more than gains feel good - shapes every money and negotiation decision."}
+  - {key: barber2000, type: paper, level: research, authors: "Barber, B. M., & Odean, T.", year: 2000,
+     title: "Trading Is Hazardous to Your Wealth: The Common Stock Investment Performance of Individual Investors",
+     venue: "Journal of Finance, 55(2)", why: "Frequent trading costs individual investors - the case for boring index funds."}
+  - {key: housel, type: book, level: intro, authors: "Morgan Housel", year: 2020, title: "The Psychology of Money",
+     why: "Wealth as behavior, patience and margin of safety."}
+  - {key: bogle, type: book, level: intro, authors: "John C. Bogle", year: 2007, title: "The Little Book of Common Sense Investing",
+     why: "Low-cost index investing from the person who built it."}
+  - {key: kaufman, type: book, level: core, authors: "Josh Kaufman", year: 2010, title: "The Personal MBA",
+     why: "The core business concepts in plain language - value, margins, systems."}
+  - {key: cfpb, type: guide, level: intro, title: "Consumer Financial Protection Bureau - consumer tools",
+     url: "https://www.consumerfinance.gov", why: "Unbiased US government guides on budgeting, debt, credit and collections."}
+  - {key: annualcredit, type: guide, level: intro, title: "AnnualCreditReport.com - free credit reports",
+     url: "https://www.annualcreditreport.com", why: "The official site for free reports from all three bureaus."}
+  - {key: myfico, type: guide, level: intro, title: "myFICO - what's in your credit score",
+     url: "https://www.myfico.com", why: "FICO's own explanation of the score's five categories."}
+  - {key: irs_transcript, type: guide, level: core, title: "IRS - Get Transcript",
+     url: "https://www.irs.gov/individuals/get-transcript", why: "See what the IRS has on file for each year."}
+  - {key: irs_pastdue, type: guide, level: core, title: "IRS - Filing past due tax returns",
+     url: "https://www.irs.gov/businesses/small-businesses-self-employed/filing-past-due-tax-returns",
+     why: "Official steps for unfiled years."}
+  - {key: irs_plans, type: guide, level: core, title: "IRS - Payment plans (installment agreements)",
+     url: "https://www.irs.gov/payments/payment-plans-installment-agreements", why: "Options when you owe and can't pay in full."}
+  - {key: sba_costs, type: guide, level: intro, title: "SBA - Calculate your startup costs",
+     url: "https://www.sba.gov/business-guide/plan-your-business/calculate-your-startup-costs",
+     why: "Official worksheet thinking for fixed vs. one-time costs."}
+  - {key: investor_gov, type: guide, level: intro, title: "Investor.gov (SEC) - introduction to investing",
+     url: "https://www.investor.gov", why: "The SEC's plain-language investing basics and fee calculators."}
+  - {key: khan_finance, type: course, level: intro, title: "Khan Academy - Personal finance & economics",
+     url: "https://www.khanacademy.org", why: "Free short videos on interest, credit, taxes and markets."}
+  - {key: shiller_coursera, type: course, level: advanced, authors: "Robert Shiller (Yale)", title: "Financial Markets",
+     url: "https://www.coursera.org", why: "A Nobel laureate's free course on how markets and risk really work."}
+  - {key: mit_15401, type: course, level: advanced, authors: "Andrew Lo (MIT)", title: "15.401 Finance Theory I (MIT OpenCourseWare)",
+     url: "https://ocw.mit.edu", why: "Master's-level present value, valuation and risk - free lectures."}
+  # ---------------- Negotiation
+  - {key: fisher_ury, type: book, level: core, authors: "Roger Fisher, William Ury & Bruce Patton", year: 1981, title: "Getting to Yes",
+     why: "Interests not positions; the origin of BATNA."}
+  - {key: voss, type: book, level: core, authors: "Chris Voss", year: 2016, title: "Never Split the Difference",
+     why: "Tactical empathy: labeling, mirroring, calibrated questions."}
+  - {key: malhotra, type: book, level: advanced, authors: "Deepak Malhotra & Max H. Bazerman", year: 2007, title: "Negotiation Genius",
+     why: "Harvard Business School's research-based negotiation playbook."}
+  - {key: galinsky2001, type: paper, level: research, authors: "Galinsky, A. D., & Mussweiler, T.", year: 2001,
+     title: "First Offers as Anchors: The Role of Perspective-Taking and Negotiator Focus",
+     venue: "Journal of Personality and Social Psychology, 81(4)", why: "Why the first number on the table pulls the outcome."}
+  - {key: mason2013, type: paper, level: research, authors: "Mason, M. F., Lee, A. J., Wiley, E. A., & Ames, D. R.", year: 2013,
+     title: "Precise Offers Are Potent Anchors: Conciliatory Counteroffers and Attributions of Knowledge in Negotiations",
+     venue: "Journal of Experimental Social Psychology, 49(4)", why: "$3,525 beats $3,500 - precise numbers signal homework."}
+  - {key: ames2015, type: paper, level: research, authors: "Ames, D. R., & Mason, M. F.", year: 2015,
+     title: "Tandem Anchoring: Informational and Politeness Effects of Range Offers in Social Exchange",
+     venue: "Journal of Personality and Social Psychology, 108(2)", why: "When offering a range helps, and how to build one."}
+  - {key: pon, type: guide, level: core, title: "Program on Negotiation at Harvard Law School - daily blog",
+     url: "https://www.pon.harvard.edu", why: "Short research-backed articles from the people who wrote Getting to Yes."}
+  # ---------------- GRC Engineering & Technology
+  - {key: saltzer1975, type: paper, level: research, authors: "Saltzer, J. H., & Schroeder, M. D.", year: 1975,
+     title: "The Protection of Information in Computer Systems", venue: "Proceedings of the IEEE, 63(9)",
+     why: "Least privilege, fail-safe defaults, separation of privilege - the design principles under every control framework."}
+  - {key: meadows, type: book, level: core, authors: "Donella H. Meadows", year: 2008, title: "Thinking in Systems",
+     why: "Feedback loops, stocks and flows - how systems (and controls) actually behave."}
+  - {key: sre_book, type: book, level: advanced, authors: "Beyer, B., Jones, C., Petoff, J., & Murphy, N. R. (eds.)", year: 2016,
+     title: "Site Reliability Engineering: How Google Runs Production Systems", url: "https://sre.google",
+     why: "Free online. Automation, SLOs and toil - the engineering mindset GRC needs."}
+  - {key: morris_iac, type: book, level: core, authors: "Kief Morris", year: 2020, title: "Infrastructure as Code (2nd ed.)",
+     why: "The patterns behind Terraform: definitions, pipelines, testing infrastructure."}
+  - {key: sweigart, type: book, level: intro, authors: "Al Sweigart", title: "Automate the Boring Stuff with Python",
+     url: "https://automatetheboringstuff.com", why: "Free online. Python for people who want results, not theory."}
+  - {key: cs50p, type: course, level: intro, authors: "Harvard CS50", title: "CS50's Introduction to Programming with Python",
+     url: "https://cs50.harvard.edu", why: "Free, rigorous, with problem sets that check your code."}
+  - {key: py_tutorial, type: guide, level: intro, title: "The Python Tutorial (official docs)",
+     url: "https://docs.python.org/3/tutorial/", why: "The language reference you'll use for years."}
+  - {key: mdn_http, type: guide, level: intro, title: "MDN - An overview of HTTP",
+     url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview", why: "How APIs talk: requests, responses, status codes."}
+  - {key: requests_docs, type: guide, level: intro, title: "Requests: HTTP for Humans (Python library docs)",
+     url: "https://requests.readthedocs.io", why: "The standard Python library for calling APIs."}
+  - {key: nws_api, type: guide, level: core, title: "National Weather Service API",
+     url: "https://www.weather.gov/documentation/services-web-api", why: "Free public API - forecast data for go/no-go rental calls."}
+  - {key: opa_docs, type: guide, level: core, title: "Open Policy Agent documentation (Rego)",
+     url: "https://www.openpolicyagent.org/docs/latest/", why: "Official docs and policy playground for Rego."}
+  - {key: tf_tutorials, type: course, level: core, title: "HashiCorp - Terraform tutorials",
+     url: "https://developer.hashicorp.com/terraform/tutorials", why: "Free official path, aligned to the Associate exam."}
+  - {key: nist_csf2, type: standard, level: core, title: "NIST Cybersecurity Framework (CSF) 2.0", year: 2024,
+     url: "https://www.nist.gov/cyberframework", why: "Govern, Identify, Protect, Detect, Respond, Recover."}
+  - {key: nist_80053, type: standard, level: advanced, title: "NIST SP 800-53 Rev. 5 - Security and Privacy Controls", year: 2020,
+     url: "https://csrc.nist.gov", why: "The deepest free control catalogue - great for mapping."}
+  - {key: iso27001, type: standard, level: advanced, title: "ISO/IEC 27001:2022 - Information security management systems",
+     url: "https://www.iso.org/standard/27001", why: "The ISMS standard (purchase required) - Annex A lists 93 controls."}
+  - {key: aicpa_tsc, type: standard, level: advanced, title: "AICPA Trust Services Criteria (SOC 2)",
+     url: "https://www.aicpa-cima.com", why: "The criteria SOC 2 reports are written against."}
+  # ---------------- Thinking & Decisions / Law / Leadership (catalog)
+  - {key: tversky1974, type: paper, level: research, authors: "Tversky, A., & Kahneman, D.", year: 1974,
+     title: "Judgment under Uncertainty: Heuristics and Biases", venue: "Science, 185(4157)",
+     why: "Anchoring, availability, representativeness - the foundation of bias research."}
+  - {key: duke, type: book, level: core, authors: "Annie Duke", year: 2018, title: "Thinking in Bets",
+     why: "Separate decision quality from outcome luck."}
+  - {key: kahneman_tfs, type: book, level: core, authors: "Daniel Kahneman", year: 2011, title: "Thinking, Fast and Slow",
+     why: "System 1 vs System 2 - the bias catalogue in book form."}
+  - {key: meditations, type: book, level: intro, authors: "Marcus Aurelius (trans. Gregory Hays)", year: 2002,
+     title: "Meditations", why: "Duty, restraint and perspective under pressure."}
+  - {key: zinsser, type: book, level: core, authors: "William Zinsser", year: 1976, title: "On Writing Well",
+     why: "Clear, short, persuasive writing - the core of Translation and Argument."}
+  - {key: lsac, type: guide, level: core, title: "LSAC - LSAT information and official LawHub prep",
+     url: "https://www.lsac.org", why: "Official test dates, format and free practice tests."}
+  - {key: goldratt, type: book, level: core, authors: "Eliyahu M. Goldratt", year: 1984, title: "The Goal",
+     why: "Find the constraint - a business novel about operations."}
+  # ---------------- History (no limit)
+  - {key: james_bj, type: book, level: core, authors: "C. L. R. James", year: 1938, title: "The Black Jacobins",
+     why: "The classic history of Toussaint Louverture and the Haitian Revolution."}
+  - {key: dubois_avengers, type: book, level: core, authors: "Laurent Dubois", year: 2004,
+     title: "Avengers of the New World: The Story of the Haitian Revolution", why: "Modern, accessible scholarship."}
+  - {key: trouillot, type: book, level: advanced, authors: "Michel-Rolph Trouillot", year: 1995,
+     title: "Silencing the Past: Power and the Production of History",
+     why: "A Haitian scholar on whose history gets told - history and critical thinking at once."}
+  - {key: franklin_fsf, type: book, level: core, authors: "John Hope Franklin", year: 1947,
+     title: "From Slavery to Freedom: A History of African Americans", why: "The landmark survey (many later editions)."}
+  - {key: wilkerson, type: book, level: core, authors: "Isabel Wilkerson", year: 2010, title: "The Warmth of Other Suns",
+     why: "The Great Migration through three lives."}
+  - {key: gombrich, type: book, level: intro, authors: "E. H. Gombrich", title: "A Little History of the World",
+     why: "World history in short, readable chapters."}
+  - {key: ferguson_money, type: book, level: core, authors: "Niall Ferguson", year: 2008, title: "The Ascent of Money",
+     why: "A financial history of the world - money as a history subject."}
+  - {key: pwia, type: guide, level: intro, title: "Personal Watercraft Industry Association",
+     url: "https://www.pwia.org", why: "Industry body - a starting point for jet ski history and safety."}
+  # ---------------- Life skills
+  - {key: yamaha_manual, type: guide, level: core, title: "Yamaha WaveRunner owner's manual (for your exact model and year)",
+     url: "https://www.yamahawaverunners.com", why: "The authority on maintenance intervals and storage steps for your skis."}
+  - {key: thisoldhouse, type: guide, level: intro, title: "This Old House - painting and repair how-tos",
+     url: "https://www.thisoldhouse.com", why: "Long-running, trusted home improvement guidance."}

@@ -1,0 +1,241 @@
+course: OWN101
+units:
+  - key: OWN101-U1
+    title: "Cash flow: the money system you actually run"
+    mode: knowledge
+    weeks: "1-2"
+    objectives:
+      - Explain the difference between income, cash on hand and money already promised
+      - Describe why scarcity makes planning harder, and how automatic systems help
+      - Set up a pay-yourself-first split that runs on every paycheck
+    sources: [shah2012, thaler2004, cfpb, housel]
+    learn: >-
+      Cash flow is the timing of money in and out, not the total. Expected pay is not cash. Scarcity research shows
+      that money stress narrows attention ("tunneling"), so good systems decide in advance - the split, the order,
+      the cool-off - instead of relying on willpower in the moment.
+    key_points:
+      - Expected income is not cash until it is received
+      - Scarcity narrows attention; decide rules in advance
+      - Pay obligations and reserves first, wants last
+      - Automatic, pre-committed saving beats willpower (Save More Tomorrow)
+    apply: "Set up your real funds on the Money page and record one real paycheck split."
+    deliverable: "Funds created in every space you use, and one 'Got paid? Split it' recorded."
+    quiz:
+      - q: "Your RXO paycheck is scheduled for Friday. Today is Tuesday. How should LIFE OS treat that money today?"
+        choices: ["As cash you can spend", "As expected income - not cash until received", "As savings", "As a debt payment"]
+        answer: 1
+        why: "Expected income can be delayed or smaller than planned. Only received money is cash (control FIN-C001)."
+      - q: "What did Shah, Mullainathan & Shafir (2012) find about scarcity?"
+        choices: ["It improves long-term planning", "It focuses attention on urgent needs and can cause over-borrowing",
+                  "It has no measurable effect", "It only affects people with high incomes"]
+        answer: 1
+        why: "Scarcity pulls attention to the immediate problem ('tunneling'), which can lead to costly borrowing later."
+      - q: "Why does the paycheck splitter fund debts and reserves before wants?"
+        type: short
+        key_points: ["obligations have deadlines and consequences", "protected reserves come before discretionary spending",
+                     "deciding the order in advance removes in-the-moment temptation"]
+  - key: OWN101-U2
+    title: "Debt: interest, payoff order and the psychology of paying it down"
+    mode: knowledge
+    weeks: "3-4"
+    objectives:
+      - Compare the avalanche and snowball methods and when each makes sense
+      - Explain APR vs APY and how interest compounds on unpaid balances
+      - Choose and justify a payoff order for your own debts
+    sources: [amar2011, gathergood2019, cfpb, kahneman1979]
+    learn: >-
+      Avalanche pays the highest interest rate first and minimizes total interest. Snowball pays the smallest balance
+      first for quick wins. Research shows people prefer closing small accounts even when it costs more (Amar et al.),
+      and most don't target the highest-rate card (Gathergood et al.). Personal debts to family carry no interest but
+      do carry trust - and deadlines you promised.
+    key_points:
+      - Avalanche = highest rate first, lowest total interest
+      - Snowball = smallest balance first, motivation from quick wins
+      - Promised deadlines (family, former partner) are commitments, not just math
+      - Minimum payments on everything, extra to one target
+    apply: "Write your payoff order for every debt on the Money page, with one sentence of reasoning each."
+    deliverable: "A ranked debt list with reasons, and the first extra payment recorded."
+    quiz:
+      - q: "Which method minimizes the total interest you pay?"
+        choices: ["Snowball (smallest balance first)", "Avalanche (highest interest rate first)",
+                  "Paying all debts equally", "Paying the newest debt first"]
+        answer: 1
+        why: "Every extra dollar on the highest-rate balance avoids the most interest."
+      - q: "What does APY include that APR does not?"
+        choices: ["Fees only", "The effect of compounding", "Taxes", "Inflation"]
+        answer: 1
+        why: "APY reflects interest earned or charged on previously accrued interest within the year."
+      - q: "Amar et al. (2011) found that people managing several debts tend to…"
+        choices: ["pay the highest-rate debt first", "close small debts first even when it costs more",
+                  "ignore all debts equally", "always consolidate"]
+        answer: 1
+        why: "'Debt account aversion' - the pull to reduce the number of debts rather than the cost."
+  - key: OWN101-U3
+    title: "Credit: how scores and reports really work"
+    mode: knowledge
+    weeks: "5-6"
+    objectives:
+      - Name the five FICO score categories and their approximate weights
+      - Read a credit report and spot errors worth disputing
+      - Explain utilization and how to improve it
+    sources: [myfico, annualcredit, cfpb]
+    learn: >-
+      Your score is calculated from your reports. FICO groups it into payment history (~35%), amounts owed (~30%),
+      length of history (~15%), new credit (~10%) and credit mix (~10%). Reports can contain errors - you have the
+      right to dispute inaccurate information with the bureau. Recovery is mostly on-time payments plus lower utilization,
+      over time.
+    key_points:
+      - Payment history is the biggest factor (~35%)
+      - Utilization = balance / limit; lower is better
+      - Get free reports from AnnualCreditReport.com
+      - Dispute inaccurate items with the bureau and the creditor, and keep records
+    apply: "Pull your reports from all three bureaus and list every account, balance and anything that looks wrong."
+    deliverable: "A list of accounts from all three reports, with any disputes filed and tracked as tasks."
+    quiz:
+      - q: "Which category carries the most weight in a FICO score?"
+        choices: ["Credit mix", "New credit", "Payment history", "Length of credit history"]
+        answer: 2
+        why: "Payment history is about 35% of a FICO score."
+      - q: "A card has a $1,000 limit and a $600 balance. What is the utilization?"
+        choices: ["6%", "40%", "60%", "100%"]
+        answer: 2
+        why: "Utilization = balance / limit = 600 / 1,000 = 60%."
+      - q: "Where do you get your official free credit reports?"
+        choices: ["Any app that advertises a free score", "AnnualCreditReport.com", "Your bank only", "The IRS"]
+        answer: 1
+        why: "AnnualCreditReport.com is the official site for free reports from Equifax, Experian and TransUnion."
+  - key: OWN101-U4
+    title: "Taxes and the IRS: unfiled returns without panic"
+    mode: knowledge
+    weeks: "7-8"
+    objectives:
+      - Explain why filing on time matters even when you can't pay
+      - Use IRS transcripts to see what the IRS has on file
+      - Know the options when you owe more than you can pay now
+    sources: [irs_transcript, irs_pastdue, irs_plans, khan_finance]
+    learn: >-
+      The failure-to-file penalty is generally much larger than the failure-to-pay penalty (5% vs 0.5% of the unpaid
+      tax per month, each capped at 25%), so filing - even without full payment - limits the damage. A Wage & Income
+      transcript shows the W-2s and 1099s reported for you; an Account transcript shows balances, payments and penalties.
+      If a year would produce a refund, you generally must file within 3 years of the due date to claim it.
+      Payment plans exist for balances you can't pay at once. Never assume an unknown balance is $0 (FIN-C004).
+    key_points:
+      - File even if you can't pay - the filing penalty is the bigger one
+      - Wage & Income transcript = what was reported; Account transcript = balance, payments, penalties
+      - Refunds generally expire 3 years after the due date
+      - Payment plans exist; unknown balance is never $0
+    apply: "Get your transcripts and list exactly which years are unfiled and what each shows."
+    deliverable: "A per-year table: filed?, reported income, balance shown - linked to your tax-compliance goal."
+    quiz:
+      - q: "You owe tax you can't pay yet. What usually limits penalties the most?"
+        choices: ["Waiting until you can pay in full", "Filing on time anyway", "Ignoring IRS letters",
+                  "Only paying the penalty"]
+        answer: 1
+        why: "Failure-to-file runs about 5% per month vs 0.5% for failure-to-pay, so filing stops the bigger one."
+      - q: "Which transcript shows the W-2 and 1099 income reported to the IRS for you?"
+        choices: ["Account transcript", "Wage & Income transcript", "Record of Account", "Tax Return transcript"]
+        answer: 1
+        why: "Wage & Income transcripts list information returns like W-2s and 1099s."
+      - q: "A 1099-NEC usually means you were paid as…"
+        choices: ["an employee with tax withheld", "an independent contractor", "a retiree", "a student"]
+        answer: 1
+        why: "Nonemployee compensation - no withholding, and self-employment tax may apply."
+  - key: OWN101-U5
+    title: "Unit economics of a rental fleet"
+    mode: studio
+    weeks: "9-10"
+    objectives:
+      - Calculate contribution margin per booking
+      - Calculate break-even bookings and payback for one ski
+      - Separate fixed costs from variable costs
+    sources: [kaufman, sba_costs, mit_15401]
+    learn: >-
+      Contribution margin = price minus the variable cost of serving that customer (fuel, cleaning, card fees,
+      operator pay per booking). Fixed costs (insurance, storage, registration) exist whether you rent or not.
+      Payback = what a ski costs ready-to-rent divided by its contribution margin per booking.
+    key_points:
+      - Contribution margin = price - variable cost per unit
+      - Break-even units = fixed costs / contribution margin
+      - Payback = investment / contribution per period
+      - A booking is only profitable after variable costs
+    apply: >-
+      Using your real numbers, calculate the contribution margin per booking and how many bookings each ski needs to
+      pay back its ready-to-rent cost. Add the result to the ski's notes on the Deals page.
+    deliverable: "A one-page unit-economics sheet for the fleet that you'd show a lender - numbers you can defend."
+    quiz:
+      - q: "A booking brings in $208. Variable costs per booking are $60. A ski costs $4,900 ready to rent. About how many bookings to pay it back?"
+        choices: ["24", "34", "40", "82"]
+        answer: 1
+        why: "Contribution = $208 - $60 = $148. $4,900 / $148 = 33.1, so 34 bookings."
+      - q: "Which is a variable cost for a rental?"
+        choices: ["Annual insurance policy", "Fuel used during the booking", "Storage rent", "Registration"]
+        answer: 1
+        why: "Fuel scales with each booking; the others are fixed."
+  - key: OWN101-U6
+    title: "Investing foundations - for when reserves are full"
+    mode: knowledge
+    weeks: "11-12"
+    objectives:
+      - Explain index funds, expense ratios and diversification
+      - Explain real vs nominal returns and the rule of 72
+      - Write your own investment policy statement for later
+    sources: [bogle, barber2000, investor_gov, shiller_coursera]
+    learn: >-
+      Low-cost, diversified index funds beat most individual stock-picking after fees (Barber & Odean found frequent
+      traders underperform). Inflation erodes returns: real return ≈ nominal return - inflation. Investing comes after
+      protected reserves and high-interest debt - your money controls enforce that order.
+    key_points:
+      - Index funds = broad, low-cost diversification
+      - Expense ratios compound against you
+      - Real return ≈ nominal - inflation
+      - Rule of 72: years to double ≈ 72 / rate
+    apply: "Write a one-page investment policy: what has to be true before you invest, what you'll buy, what you won't."
+    deliverable: "Investment policy statement saved to your rules page."
+    quiz:
+      - q: "At an 8% annual return, roughly how long does money take to double?"
+        choices: ["4 years", "9 years", "15 years", "20 years"]
+        answer: 1
+        why: "Rule of 72: 72 / 8 = 9 years."
+      - q: "An investment returns 7% while inflation is 3%. The approximate real return is…"
+        choices: ["10%", "7%", "4%", "3%"]
+        answer: 2
+        why: "Real return ≈ nominal - inflation = 7% - 3% = 4%."
+      - q: "What did Barber & Odean (2000) find about individual investors who trade frequently?"
+        choices: ["They outperform the market", "They underperform after trading costs", "They match the market exactly",
+                  "They take less risk"]
+        answer: 1
+        why: "The most active traders earned noticeably lower net returns."
+cards:
+  - {unit: OWN101-U1, kind: definition, term: "Cash flow", definition: "The timing of money coming in and going out - not the total you earn."}
+  - {unit: OWN101-U1, kind: definition, term: "Pay yourself first", definition: "Move money to obligations and savings as soon as income arrives, before discretionary spending."}
+  - {unit: OWN101-U1, kind: definition, term: "Sinking fund", definition: "Money set aside in small amounts for a known future expense (e.g. Christmas, registration)."}
+  - {unit: OWN101-U1, kind: definition, term: "Emergency fund", definition: "Cash reserved only for unexpected, necessary expenses."}
+  - {unit: OWN101-U1, kind: definition, term: "Scarcity (tunneling)", definition: "When money is tight, attention narrows to the immediate problem, making long-term planning harder."}
+  - {unit: OWN101-U2, kind: acronym, term: "APR", definition: "Annual Percentage Rate - the yearly cost of borrowing, not including compounding."}
+  - {unit: OWN101-U2, kind: acronym, term: "APY", definition: "Annual Percentage Yield - the yearly rate including the effect of compounding."}
+  - {unit: OWN101-U2, kind: definition, term: "Avalanche method", definition: "Pay minimums on all debts; put extra on the highest interest rate first. Lowest total interest."}
+  - {unit: OWN101-U2, kind: definition, term: "Snowball method", definition: "Pay minimums on all debts; put extra on the smallest balance first. Quick wins, more interest."}
+  - {unit: OWN101-U2, kind: definition, term: "Compound interest", definition: "Interest charged or earned on previously accrued interest, not just the original amount."}
+  - {unit: OWN101-U2, kind: definition, term: "Charge-off", definition: "When a lender writes a debt off as unlikely to be collected - the debt is still owed and hurts credit."}
+  - {unit: OWN101-U3, kind: acronym, term: "DTI", definition: "Debt-to-Income ratio - total monthly debt payments divided by gross monthly income."}
+  - {unit: OWN101-U3, kind: acronym, term: "FICO", definition: "The most widely used credit score model (Fair Isaac Corporation), roughly 300-850."}
+  - {unit: OWN101-U3, kind: definition, term: "Credit utilization", definition: "Revolving balances divided by credit limits. Lower is better for your score."}
+  - {unit: OWN101-U3, kind: definition, term: "Hard inquiry", definition: "A credit check for a new application; can lower the score slightly for a time."}
+  - {unit: OWN101-U3, kind: definition, term: "Dispute", definition: "A request to a credit bureau to correct or remove inaccurate information on your report."}
+  - {unit: OWN101-U4, kind: definition, term: "Failure-to-file penalty", definition: "Generally 5% of unpaid tax per month late, up to 25% - much larger than failure-to-pay."}
+  - {unit: OWN101-U4, kind: definition, term: "Wage & Income transcript", definition: "IRS record of income reported for you (W-2s, 1099s) for a tax year."}
+  - {unit: OWN101-U4, kind: definition, term: "Account transcript", definition: "IRS record of a year's balance, payments, penalties and interest."}
+  - {unit: OWN101-U4, kind: acronym, term: "AGI", definition: "Adjusted Gross Income - total income minus specific adjustments; the base for many tax rules."}
+  - {unit: OWN101-U4, kind: definition, term: "Schedule C", definition: "The IRS form for profit or loss from a sole proprietorship (e.g. a rental side business)."}
+  - {unit: OWN101-U4, kind: definition, term: "Installment agreement", definition: "An IRS payment plan for paying a tax balance over time."}
+  - {unit: OWN101-U5, kind: definition, term: "Contribution margin", definition: "Price minus variable cost per unit - what each sale contributes to fixed costs and profit."}
+  - {unit: OWN101-U5, kind: definition, term: "Break-even point", definition: "Units needed so total contribution equals fixed costs: fixed costs / contribution margin."}
+  - {unit: OWN101-U5, kind: definition, term: "Payback period", definition: "Time for an investment to return its cost: investment / cash flow per period."}
+  - {unit: OWN101-U5, kind: acronym, term: "CAPEX", definition: "Capital expenditure - money spent on long-lived assets (e.g. buying a ski)."}
+  - {unit: OWN101-U5, kind: acronym, term: "OPEX", definition: "Operating expenditure - ongoing costs to run the business (fuel, insurance, pay)."}
+  - {unit: OWN101-U5, kind: acronym, term: "ROI", definition: "Return on Investment - gain from an investment relative to its cost."}
+  - {unit: OWN101-U6, kind: definition, term: "Index fund", definition: "A fund that holds a whole market index at low cost instead of picking stocks."}
+  - {unit: OWN101-U6, kind: definition, term: "Expense ratio", definition: "The yearly fee a fund charges as a percentage of your investment."}
+  - {unit: OWN101-U6, kind: definition, term: "Real return", definition: "Return after inflation - approximately nominal return minus inflation."}
+  - {unit: OWN101-U6, kind: definition, term: "Rule of 72", definition: "Years to double ≈ 72 / annual return rate."}
+  - {unit: OWN101-U6, kind: acronym, term: "NPV", definition: "Net Present Value - today's value of future cash flows minus the cost; positive means the investment adds value."}

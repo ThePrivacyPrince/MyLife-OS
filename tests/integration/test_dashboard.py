@@ -5,7 +5,7 @@ from streamlit.testing.v1 import AppTest
 from lifeos.config import REPO_ROOT
 
 APP = str(REPO_ROOT / "lifeos" / "dashboard" / "app.py")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Add", "Recurring", "All tasks", "Review"]
 
 
 @pytest.fixture
@@ -279,3 +279,28 @@ def test_int21_deals_views_and_add_listing(seeded_db, view):
     at.session_state["dq_view"] = view
     at.run()
     assert not at.exception, at.exception
+
+
+
+@pytest.mark.parametrize("view", ["This semester", "Review", "Catalog", "Library", "History", "Exams", "Hands-on",
+                                  "Report card"])
+def test_int22_university_views(seeded_db, view):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("University").run()
+    at.session_state["uni_view"] = view
+    at.run()
+    assert not at.exception, at.exception
+
+
+def test_int23_start_unit_then_review_a_card(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("University").run()
+    [b for b in at.button if b.label == "Start this unit"][0].click().run()
+    assert any("Unit started" in x.value for x in at.success), [e.value for e in at.error]
+    at.session_state["uni_view"] = "Review"
+    at.run()
+    [b for b in at.button if b.label == "Show answer"][0].click().run()
+    [b for b in at.button if b.label == "✅ Knew it"][0].click().run()
+    assert not at.exception

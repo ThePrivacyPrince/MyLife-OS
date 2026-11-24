@@ -1,0 +1,28 @@
+# History & Civilization - open inquiries. No limit: add as many of your own as you want in the app.
+# Method: a question -> at least two independent sources -> your own conclusion (and what would change your mind).
+inquiries:
+  - key: HIS-HAITI-1
+    topic: "The Haitian Revolution"
+    question: "Why did the Haitian Revolution succeed when other slave revolts in the Americas did not?"
+    sources: [james_bj, dubois_avengers, trouillot]
+  - key: HIS-HAITI-2
+    topic: "Haiti after independence"
+    question: "How did the 1825 indemnity demanded by France shape Haiti's economy for the next century?"
+    sources: [dubois_avengers, trouillot]
+  - key: HIS-BLACK-1
+    topic: "Black history in America"
+    question: "What pushed and pulled six million Black Americans north and west in the Great Migration - and what did they build?"
+    sources: [wilkerson, franklin_fsf]
+  - key: HIS-WORLD-1
+    topic: "World history"
+    question: "What made some civilizations last for centuries while others collapsed quickly?"
+    sources: [gombrich]
+  - key: HIS-MONEY-1
+    topic: "History of money and power"
+    question: "How did credit, bonds and banks change who could build wealth?"
+    sources: [ferguson_money]
+  - key: HIS-PWC-1
+    topic: "History of personal watercraft and rentals"
+    question: "How did personal watercraft go from an invention to a rental industry - and what safety and regulation followed?"
+    sources: [pwia]
+    note: "Few books exist - find and check sources yourself (manufacturers' histories, industry bodies, news archives)."

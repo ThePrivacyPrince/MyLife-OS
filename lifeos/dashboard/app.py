@@ -20,6 +20,7 @@ from lifeos.enums import MissedPolicy, Priority, TaskStatus as S
 from lifeos.errors import GateViolation, LifeOSError
 from lifeos.engines.cascade import TIER_LABELS
 from lifeos.models import Goal, KeyResult, Objective, Pillar, RecurringTemplate, Task, Vision
+from lifeos.models import UnitProgress as UnitProgressModel
 from lifeos.services import cascade as C
 from lifeos.services import planner_cal as P
 from lifeos.services import task_edit as E
@@ -27,6 +28,8 @@ from lifeos.services import daily_check as D
 from lifeos.services import outcomes as O
 from lifeos.services import money as M
 from lifeos.services import acquisitions as Q
+from lifeos.services import university as UNI
+from lifeos.engines import learning as LRN
 from lifeos.engines import acquisition as AQ
 from lifeos.services import weekly as W
 from lifeos.services import recurring as R
@@ -83,7 +86,8 @@ def val(key: str, default=None):
 
 # ------------------------------------------------------------------ sidebar
 st.sidebar.title("◎ LIFE OS")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Add", "Recurring", "All tasks",
+         "Review"]
 page = st.sidebar.radio("View", PAGES, label_visibility="collapsed", key="nav")
 day: dt.date = st.sidebar.date_input("Planning date", value=get_settings().today())
 pillar_filter = st.sidebar.multiselect("Pillars", list(ICON), format_func=lambda c: f"{ICON[c]} {c}")
@@ -1046,6 +1050,294 @@ def page_deals() -> None:
                 seller_statements=val("na_ss", "")), "Listing added"))
 
 
+# ================================================================== University
+SRC_ICON = {"paper": "📄", "book": "📕", "guide": "🧭", "course": "🎬", "standard": "📐"}
+LEVEL_TEXT = {"none": "not started", "introduced": "introduced", "practiced": "practiced", "recalled": "recalled",
+              "applied": "applied", "mastered": "mastered"}
+
+
+def source_line(key: str, checked: set, k: str) -> None:
+    sr = UNI.source(key)
+    cite = sr["title"]
+    if sr.get("authors"):
+        cite = f"{sr['authors']}{' (' + str(sr['year']) + ')' if sr.get('year') else ''}. *{sr['title']}*"
+    if sr.get("venue"):
+        cite += f". {sr['venue']}"
+    link = f" · [open]({sr['url']})" if sr.get("url") else (" · find it on Google Scholar" if sr["type"] == "paper" else "")
+    r = st.columns([0.9, 0.1])
+    r[0].markdown(f"{SRC_ICON.get(sr['type'], '•')} {cite}{link}  \n:gray[{sr['level']} · {sr['why']}]")
+    if key in checked:
+        r[1].caption("✔ checked")
+    else:
+        r[1].button("✔", key=f"chk{k}{key}", help="I opened it and it's what it says", on_click=act,
+                    args=(lambda s, kk=key: UNI.check_source(s, kk, day), "Marked as checked"))
+
+
+def unit_panel(u: dict, checked: set) -> None:
+    key = u["key"]
+    k = key.replace("-", "")
+    lvl = UNI.unit_level(s, key)
+    prog = s.get(UnitProgressModel, key)
+    if not prog or not prog.started_on:
+        st.button("Start this unit", key=f"us{k}", type="primary", on_click=act, args=(
+            lambda s: UNI.start_unit(s, key, day), "Unit started - its flashcards join your reviews"))
+    t1, t2, t3, t4, t5 = st.tabs(["📖 Learn", "🧠 Recall", "✅ Test", "🔨 Apply", "🃏 Cards"])
+    with t1:
+        st.markdown("**You'll be able to:**  \n" + "  \n".join(f"• {o}" for o in u["objectives"]))
+        st.markdown(u["learn"])
+        st.markdown("**Sources**")
+        for sk in u["sources"]:
+            source_line(sk, checked, k)
+    with t2:
+        st.caption("Close the sources. Write everything you remember in your own words - then check it against the key points.")
+        st.text_area("What I remember", value=prog.recall_text if prog else "", key=f"rc{k}", height=120)
+        st.markdown("**Key points - tick the ones you actually got:**")
+        for i, kp in enumerate(u["key_points"]):
+            st.checkbox(kp, value=bool(prog and kp in (prog.recall_hits or [])), key=f"rk{k}{i}")
+        st.button("Save recall", key=f"rcs{k}", on_click=act, args=(lambda s: UNI.save_recall(
+            s, key, val(f"rc{k}", ""), [kp for i, kp in enumerate(u["key_points"]) if val(f"rk{k}{i}")], day),
+            "Recall saved"))
+        if prog and prog.recall_on:
+            st.caption(f"Last recall {prog.recall_on:%b %d}: {len(prog.recall_hits or [])}/{len(u['key_points'])} key points.")
+    with t3:
+        for qi, q in enumerate(u.get("quiz", [])):
+            st.markdown(f"**Q{qi + 1}.** {q['q']}")
+            if q.get("type") == "short":
+                st.text_area("Your answer", key=f"qa{k}{qi}", height=80, label_visibility="collapsed")
+                with st.expander("Check against the key points"):
+                    for j, kp in enumerate(q["key_points"]):
+                        st.checkbox(kp, key=f"qk{k}{qi}{j}")
+                st.button("Submit", key=f"qs{k}{qi}", on_click=act, args=(lambda s, qi=qi, q=q: UNI.answer_quiz(
+                    s, key, qi, day, text=val(f"qa{k}{qi}", ""),
+                    hits=[kp for j, kp in enumerate(q["key_points"]) if val(f"qk{k}{qi}{j}")]), "Answer recorded"))
+            else:
+                st.radio("Answer", list(range(len(q["choices"]))), key=f"qr{k}{qi}", index=None,
+                         format_func=lambda i, q=q: q["choices"][i], label_visibility="collapsed")
+                st.button("Submit", key=f"qs{k}{qi}", on_click=quiz_submit, args=(key, qi, q, f"qr{k}{qi}"))
+            fb = SS.get(f"fb{key}{qi}")
+            if fb:
+                (st.success if fb[0] else st.error)(fb[1])
+    with t4:
+        st.markdown(f"**Assignment:** {u['apply']}")
+        st.markdown(f"**Done when:** {u.get('deliverable', '')}")
+        if u.get("control"):
+            st.caption(f"🛡️ Control it builds: {u['control']}")
+        st.text_area("Evidence - what you did and where the proof is", value=prog.evidence if prog else "",
+                     key=f"ev{k}", height=90)
+        if u["mode"] == "studio":
+            st.checkbox("It runs - tests pass / I used it for real", value=bool(prog and prog.evidence_runs), key=f"evr{k}")
+        st.button("Save evidence", key=f"evs{k}", type="primary", on_click=act, args=(lambda s: UNI.save_evidence(
+            s, key, val(f"ev{k}", ""), bool(val(f"evr{k}", u["mode"] != "studio")), day), "Evidence saved"))
+    with t5:
+        for c in UNI.cards_for(key):
+            st.markdown(f"**{c['term']}** {'🔤' if c['kind'] == 'acronym' else ''} — {c['definition']}")
+
+
+def quiz_submit(unit_key: str, qi: int, q: dict, widget: str) -> None:
+    choice = val(widget)
+    try:
+        with unit_of_work(_factory()) as s_:
+            ok = UNI.answer_quiz(s_, unit_key, qi, day, choice=choice)
+        SS[f"fb{unit_key}{qi}"] = (ok, ("✅ Correct. " if ok else f"❌ Not quite - answer: {q['choices'][q['answer']]}. ")
+                                    + q["why"])
+    except Exception as exc:  # validation errors shown inline
+        SS[f"fb{unit_key}{qi}"] = (False, str(exc))
+
+
+def review_session() -> None:
+    minutes, low = UNI.review_budget(s, day)
+    queue = UNI.due_cards(s, day, minutes, low)
+    all_due = len(UNI.due_cards(s, day))
+    if not queue:
+        st.success("No cards due. Start a unit to add its cards, or come back tomorrow.")
+        return
+    st.caption(f"{len(queue)} card(s) today (~{max(1, len(queue) * LRN.SECONDS_PER_CARD // 60)} min)"
+               + (f" · {all_due - len(queue)} more waiting - tight day, so only the most overdue" if all_due > len(queue) else ""))
+    cur = queue[0]
+    c = UNI.card(cur.card_key)
+    with st.container(border=True):
+        st.caption(f"{UNI.course(c['course'])['title']} · box {cur.box} · {'acronym' if c['kind'] == 'acronym' else 'definition'}")
+        st.header(c["term"], anchor=False)
+        if SS.get("uni_reveal") == cur.card_key:
+            st.subheader(c["definition"], anchor=False)
+            r = st.columns(2)
+            r[0].button("✅ Knew it", key="rv_ok", type="primary", use_container_width=True, on_click=card_answer,
+                        args=(cur.card_key, True))
+            r[1].button("❌ Missed it", key="rv_no", use_container_width=True, on_click=card_answer,
+                        args=(cur.card_key, False))
+        else:
+            st.caption("Say the answer out loud first.")
+            st.button("Show answer", key="rv_show", on_click=lambda ck=cur.card_key: SS.__setitem__("uni_reveal", ck))
+
+
+def card_answer(card_key: str, correct: bool) -> None:
+    act(lambda s_: UNI.review_card(s_, card_key, correct, day), "✓" if correct else "Back to box 0 - see it tomorrow")
+    SS.pop("uni_reveal", None)
+
+
+def page_university() -> None:
+    st.title("🎓 The Personal University")
+    sem = UNI.current_semester(day)
+    checked = UNI.checked_sources(s)
+    minutes, low = UNI.review_budget(s, day)
+    due_today = len(UNI.due_cards(s, day, minutes, low))
+    c = st.columns(4)
+    if sem:
+        started = sem["start"] <= day
+        c[0].metric(sem["code"], f"{max(0, (sem['end'] - day).days) // 7} wks left" if started else
+                    f"starts {sem['start']:%b} {sem['start'].day}")
+    c[1].metric("Cards due today", due_today)
+    s1 = UNI.courses(semester=sem["code"]) if sem else []
+    reports = [UNI.course_report(s, co["code"], day) for co in s1]
+    total_units = sum(len(r.levels) for r in reports)
+    c[2].metric("Units applied", f"{sum(r.applied for r in reports)}/{total_units}" if total_units else "-")
+    c[3].metric("Units mastered", f"{sum(r.mastered for r in reports)}/{total_units}" if total_units else "-")
+    SS.setdefault("uni_view", "This semester")
+    view = st.segmented_control("View", ["This semester", "Review", "Catalog", "Library", "History", "Exams",
+                                         "Hands-on", "Report card"], key="uni_view", label_visibility="collapsed") \
+        or "This semester"
+    if view == "This semester":
+        if not sem:
+            st.caption("No semester planned.")
+            return
+        st.caption(f"**{sem['name']}** · {sem['start']:%b %d} – {sem['end']:%b %d, %Y} · about {sem['weekly_hours']} "
+                   f"hrs/week + {sem['daily_review_minutes']} min of cards a day. Rule of One: a hard skill, a human "
+                   "skill, an anchor.")
+        for co, rep in zip(s1, reports):
+            dept = next(d for d in UNI.departments() if d["code"] == co["dept"])
+            with st.container(border=True):
+                st.markdown(f"### {dept['icon']} {co['code']} · {co['title']}")
+                st.caption(f"{co['role']} · {co['kind']} · ~{co['hours']} h/week · {co['outcome']}")
+                st.markdown(" ".join(f"{LRN.LEVEL_ICON[lv]}" for lv in rep.levels.values()) +
+                            f" :gray[· applied {rep.applied}/{len(rep.levels)} · mastered {rep.mastered}]")
+                st.caption("⚪ not started · 🔹 introduced · 🔸 practiced · 🟡 recalled (7+ days later) · 🟢 applied · "
+                           "🏅 mastered (applied + reviews 3+ weeks apart)")
+                for u in UNI.units(co["code"]):
+                    lv = rep.levels[u["key"]]
+                    with st.expander(f"{LRN.LEVEL_ICON[lv]} Weeks {u['weeks']} · {u['title']} · {LEVEL_TEXT[lv]}"):
+                        unit_panel(u, checked)
+    elif view == "Review":
+        review_session()
+    elif view == "Catalog":
+        for d in UNI.departments():
+            cs = UNI.courses(dept=d["code"])
+            with st.expander(f"{d['icon']} {d['name']} · {len(cs)} course(s)"):
+                st.caption(d["outcome"])
+                for co in cs:
+                    when = f"semester {co['semester']}" if co.get("semester") else "not scheduled yet"
+                    st.markdown(f"**{co['code']} · {co['title']}** :gray[· {co['kind']} · {when}]  \n{co['outcome']}")
+                if d["code"] == "HIS":
+                    st.caption("History has no limit - open inquiries anytime under **History**.")
+    elif view == "Library":
+        types = st.multiselect("Type", list(SRC_ICON), default=list(SRC_ICON), format_func=lambda x: f"{SRC_ICON[x]} {x}")
+        st.caption("Papers are cited, not linked - find them on Google Scholar or through a library. Tick ✔ once you've "
+                   "opened a source and confirmed it's what it says.")
+        for sk, sr in UNI.content()["sources"].items():
+            if sr["type"] in types:
+                source_line(sk, checked, "lib")
+        st.divider()
+        st.markdown("**📚 Reading log** - three takeaways and one real action per book")
+        from lifeos.models import ReadingEntry
+        entries = list(s.scalars(select(ReadingEntry).order_by(ReadingEntry.id.desc())))
+        for e in entries:
+            if e.status == "done":
+                st.markdown(f"✅ **{e.title}** :gray[· finished {e.finished_on:%b %d}]  \n" +
+                            "  \n".join(f"• {x}" for x in e.takeaways) + f"  \n→ *{e.action}*")
+            else:
+                with st.expander(f"📖 Reading: {e.title}"):
+                    for i in range(3):
+                        st.text_input(f"Takeaway {i + 1}", key=f"tk{e.id}{i}")
+                    st.text_input("One real action because of it", key=f"ta{e.id}")
+                    st.button("Finish", key=f"tf{e.id}", on_click=act, args=(lambda s, i=e.id: UNI.finish_reading(
+                        s, i, [val(f"tk{i}{j}", "") for j in range(3)], val(f"ta{i}", ""), day), "Logged 📚"))
+        books = [k_ for k_, v in UNI.content()["sources"].items() if v["type"] in ("book", "paper")]
+        r = st.columns([2, 2, 1])
+        r[0].selectbox("From the library", [None] + books, key="rl_src",
+                       format_func=lambda x: "- or type a title -" if x is None else UNI.source(x)["title"])
+        r[1].text_input("Title", key="rl_t")
+        r[2].button("Start reading", key="rl_b", on_click=act, args=(lambda s: UNI.start_reading(
+            s, val("rl_t", ""), day, source_key=val("rl_src")), "Added to your reading log"))
+    elif view == "History":
+        from lifeos.models import Inquiry
+        UNI.ensure_inquiries(s, day)
+        s.commit()
+        st.caption("No limit. Method: a question → at least two independent sources → your own conclusion → what would "
+                   "change your mind.")
+        seeds = {q["key"]: q for q in UNI.content()["inquiries"]}
+        for i in s.scalars(select(Inquiry).order_by(Inquiry.status, Inquiry.id)):
+            icon = "✅" if i.status == "concluded" else "🔎"
+            with st.expander(f"{icon} {i.topic}: {i.question}"):
+                seed = seeds.get(i.seed_key or "")
+                if seed:
+                    for sk in seed["sources"]:
+                        source_line(sk, checked, f"h{i.id}")
+                    if seed.get("note"):
+                        st.caption(seed["note"])
+                if i.status == "concluded":
+                    st.markdown(f"**Sources:** {i.sources_used}  \n**My conclusion:** {i.conclusion}  \n"
+                                f"**Would change my mind:** {i.would_change_mind}")
+                else:
+                    st.text_area("Sources used (one per line)", key=f"hs{i.id}", height=70)
+                    st.text_area("My conclusion - my own argument", key=f"hc{i.id}", height=100)
+                    st.text_input("What evidence would change my mind?", key=f"hw{i.id}")
+                    st.button("Conclude", key=f"hb{i.id}", on_click=act, args=(lambda s, ii=i.id: UNI.conclude_inquiry(
+                        s, ii, sources_used=val(f"hs{ii}", ""), conclusion=val(f"hc{ii}", ""),
+                        would_change_mind=val(f"hw{ii}", ""), today=day), "Inquiry concluded"))
+        with st.form("hadd", clear_on_submit=True):
+            r = st.columns([1, 3])
+            r[0].text_input("Topic", key="ha_t", placeholder="e.g. Haiti")
+            r[1].text_input("Question", key="ha_q", placeholder="e.g. What did the US occupation of 1915-1934 change?")
+            st.form_submit_button("Add inquiry", on_click=act, args=(lambda s: UNI.add_inquiry(
+                s, val("ha_t", ""), val("ha_q", ""), day), "Inquiry added"))
+    elif view == "Exams":
+        from lifeos.models import ExamPlan as _EP
+        for ex in UNI.exams():
+            plan = s.get(_EP, ex["code"])
+            hist = UNI.practice_history(s, ex["code"])
+            when = (f"test {plan.test_date:%b %d, %Y} · {(plan.test_date - day).days} days" if plan and plan.test_date
+                    else f"target {ex['target'] or 'not scheduled'}")
+            with st.expander(f"{'⭐' if not ex.get('optional') else '◽'} {ex['name']} · {when}"):
+                st.caption(f"{ex['provider']} · {ex['why']} · [official info]({ex['url']})")
+                r = st.columns([1.4, 1.4, 1])
+                r[0].date_input("Test date", value=(plan.test_date if plan and plan.test_date else day + dt.timedelta(days=120)),
+                                key=f"ed{ex['code']}")
+                r[1].text_input("Target score", value=plan.target_score if plan else "", key=f"et{ex['code']}")
+                r[2].button("Save", key=f"eb{ex['code']}", on_click=act, args=(lambda s, cc=ex["code"]: UNI.set_exam(
+                    s, cc, val(f"ed{cc}"), val(f"et{cc}", ""), day), "Exam plan saved"))
+                r = st.columns([1, 1, 2, 1])
+                r[0].text_input("Practice score", key=f"ps{ex['code']}")
+                r[1].text_input("Out of", key=f"pm{ex['code']}")
+                r[2].text_input("Note", key=f"pn{ex['code']}", placeholder="which test, weak areas")
+                r[3].button("Log", key=f"pb{ex['code']}", on_click=act, args=(lambda s, cc=ex["code"]: UNI.log_practice(
+                    s, cc, val(f"ps{cc}", ""), val(f"pm{cc}", ""), day, val(f"pn{cc}", "")), "Practice score logged"))
+                if hist:
+                    st.dataframe([{"day": h.day, "score": f"{h.score:g}" + (f" / {h.max_score:g}" if h.max_score else ""),
+                                   "note": h.note} for h in hist], hide_index=True, use_container_width=True)
+    elif view == "Hands-on":
+        from lifeos.models import HandsOnRun as _HR
+        for key, cl in UNI.content()["checklists"].items():
+            runs = list(s.scalars(select(_HR).where(_HR.checklist_key == key)))
+            with st.expander(f"🔧 {cl['title']}" + (f" · done {len(runs)}×" if runs else "")):
+                st.warning(cl["safety"], icon="⚠️")
+                for sk in cl["sources"]:
+                    source_line(sk, checked, f"ho{key}")
+                for i, step in enumerate(cl["steps"]):
+                    st.checkbox(step, key=f"hs{key}{i}")
+                st.text_input("Evidence (note / where the before-after photos are)", key=f"he{key}")
+                st.button("Log as done", key=f"hl{key}", on_click=act, args=(lambda s, kk=key, n=len(cl["steps"]): UNI.log_hands_on(
+                    s, kk, [i for i in range(n) if val(f"hs{kk}{i}")], val(f"he{kk}", ""), day), "Logged 🔧"))
+    else:
+        st.caption("Grades reflect demonstrated knowledge and real evidence - not hours spent.")
+        for co, rep in zip(s1, reports):
+            st.markdown(f"**{co['code']} · {co['title']}**")
+            r = st.columns(4)
+            r[0].metric("Applied", f"{rep.applied}/{len(rep.levels)}")
+            r[1].metric("Mastered", f"{rep.mastered}/{len(rep.levels)}")
+            r[2].metric("Quiz accuracy", f"{rep.quiz_correct}/{rep.quiz_total}" if rep.quiz_total else "-")
+            r[3].metric("Card recall (30 days)", f"{rep.reviews_30d_correct}/{rep.reviews_30d}" if rep.reviews_30d else "-")
+            st.caption(" · ".join(f"{LRN.LEVEL_ICON[v]} {UNI.unit(k_)['title'][:38]}" for k_, v in rep.levels.items()))
+
+
 # ================================================================== Planner
 PL_VIEWS = ["Agenda", "Week", "Month", "Weekly review"]
 
@@ -1466,6 +1758,10 @@ def page_today() -> None:
     outcomes_strip("today")
     if D.check_due(s, day):
         st.caption("🌙 Tomorrow isn't planned yet - the evening check is at the bottom of this page.")
+    _m, _low = UNI.review_budget(s, day)
+    _due = len(UNI.due_cards(s, day, _m, _low))
+    if _due:
+        st.caption(f"🧠 {_due} flashcard(s) due · ~{max(1, _due * LRN.SECONDS_PER_CARD // 60)} min - University → Review")
     today_blocks = P.blocks_between(s, day, day)
     if today_blocks:
         st.caption("📅 Schedule: " + " · ".join(f"{P.KINDS.get(b.kind, '•')} {b.time_label} {b.title}"
@@ -2206,6 +2502,6 @@ def page_review() -> None:
         lambda s: save_review(s, day, val("rv_note", "")), "Review saved"))
 
 
-{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Deals": page_deals, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
+{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Deals": page_deals, "University": page_university, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
  "Review": page_review}[page]()
 s.close()

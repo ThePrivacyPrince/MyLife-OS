@@ -1,0 +1,82 @@
+# The Personal University - catalog (general education content; no personal data).
+# Course types: studio (pass when the thing runs) · knowledge (recall/quiz/spaced cards) · exam (practice scores + test date)
+#               hands_on (checklist + evidence) · library (reading log) · inquiry (question -> sources -> your conclusion)
+
+university: The Personal University - Education for Life
+
+departments:
+  - {code: THK, name: "Thinking & Decisions", icon: "🧠", outcome: "Make fewer expensive mistakes and spot flawed arguments."}
+  - {code: MON, name: "Money & Ownership", icon: "💵", outcome: "Build wealth and avoid decisions that destroy it."}
+  - {code: BUS, name: "Business & Operations", icon: "💼", outcome: "Build businesses that run without your constant involvement."}
+  - {code: LAW, name: "Law & Argument", icon: "⚖️", outcome: "Understand your rights, spot legal risk, build a case that survives a hostile reader."}
+  - {code: ENG, name: "GRC Engineering & Technology", icon: "🛠️", outcome: "Go from GRC analyst to GRC engineer: controls that run as code."}
+  - {code: LEAD, name: "Leadership & Communication", icon: "🎙️", outcome: "Translate risk for any audience; build people who don't need you."}
+  - {code: HIS, name: "History & Civilization", icon: "🌍", outcome: "Understand where you come from and the forces that shaped the world. No limit."}
+  - {code: LIFE, name: "Life Skills", icon: "🔧", outcome: "Practical self-reliance: home, equipment, health, presence."}
+
+semesters:
+  - {code: S1, name: "Semester 1 - Ownership, Asks & First Code", start: 2026-12-07, end: 2027-02-28,
+     weekly_hours: 4, daily_review_minutes: 10}
+  - {code: S2, name: "Semester 2", start: 2027-03-08, end: 2027-05-30, weekly_hours: 4, daily_review_minutes: 10}
+  - {code: S3, name: "Semester 3", start: 2027-09-06, end: 2027-11-28, weekly_hours: 4, daily_review_minutes: 10}
+
+courses:
+  # ---- Semester 1 (Rule of One: one hard skill, one human skill, one anchor)
+  - {code: OWN101, dept: MON, title: "Ownership & Capital", kind: studio, semester: S1, role: hard, hours: 2,
+     outcome: "Run your own money like a business: cash flow, debt order, credit, taxes, unit economics, then investing."}
+  - {code: NEG101, dept: BUS, title: "Negotiation Lab", kind: studio, semester: S1, role: human, hours: 0.5,
+     outcome: "Prepare, anchor, listen and walk away - practiced on real asks and real ski deals."}
+  - {code: SYS101, dept: ENG, title: "Systems Engineering for Operators (light start)", kind: studio, semester: S1,
+     role: anchor, hours: 1.5,
+     outcome: "Python, APIs, policy-as-code and Terraform - every control built into Jet Life first. You pass when it runs."}
+  # ---- Planned (catalog) - content written when the semester is chosen
+  - {code: THK101, dept: THK, title: "Decisions Under Uncertainty", kind: knowledge, semester: null,
+     outcome: "Think in bets, base rates and expected value; run big decisions through a bias check."}
+  - {code: THK201, dept: THK, title: "Stoic Decision Hygiene", kind: knowledge, semester: null,
+     outcome: "Stay clear-headed under pressure; separate identity from wins and setbacks."}
+  - {code: INV201, dept: MON, title: "Investing for Owners", kind: knowledge, semester: null,
+     outcome: "Index investing, risk, valuation basics - once reserves are full."}
+  - {code: TAX201, dept: MON, title: "Taxes for Owners", kind: knowledge, semester: null,
+     outcome: "Business income, Schedule C, quarterly estimates, records that survive an audit."}
+  - {code: MKT201, dept: BUS, title: "Marketing That Pays", kind: studio, semester: null,
+     outcome: "Where bookings really come from; measure every channel; double down on what works."}
+  - {code: OPS201, dept: BUS, title: "Logistics & Operations Automation", kind: studio, semester: null,
+     outcome: "Find the constraint, remove manual steps, automate the handoffs."}
+  - {code: ARG201, dept: LAW, title: "Argument & Evidence", kind: studio, semester: null,
+     outcome: "Audit evidence, legal reasoning and writing that survives a hostile reader - the bridge from GRC to the JD."}
+  - {code: CON201, dept: LAW, title: "Contracts for Operators", kind: knowledge, semester: null,
+     outcome: "Read a contract before you sign it: formation, key clauses, liability, waivers, remedies."}
+  - {code: LSAT301, dept: LAW, title: "LSAT Preparation", kind: exam, semester: null, exam: LSAT,
+     outcome: "Logical reasoning, reading comprehension, timed practice to a target score."}
+  - {code: SYS201, dept: ENG, title: "Terraform & Cloud Controls", kind: exam, semester: S2, exam: TF_ASSOC,
+     outcome: "Infrastructure as code to the Terraform Associate standard, with controls enforced in the pipeline."}
+  - {code: GRC301, dept: ENG, title: "ISO 27001 & SOC 2 as Code", kind: exam, semester: S3, exam: ISO_LI,
+     outcome: "Build an ISMS; map ISO 27001 Annex A and SOC 2 criteria to controls that produce their own evidence."}
+  - {code: AI201, dept: ENG, title: "Applied AI for Operators", kind: studio, semester: null,
+     outcome: "Use AI with guardrails: structured outputs, evaluation, and humans approving what matters."}
+  - {code: TRN201, dept: LEAD, title: "Translation", kind: studio, semester: null,
+     outcome: "Explain one risk to an engineer, a board, a judge and a 19-year-old athlete. Standing assignment: one finding, four ways."}
+  - {code: OPR201, dept: LEAD, title: "Building Operators, Not Dependents", kind: studio, semester: null,
+     outcome: "Hand Jet Life NY to someone who can run it: documentation, delegation, trust."}
+  - {code: LIFE101, dept: LIFE, title: "Home Basics: Paint a Room & Small Repairs", kind: hands_on, semester: null,
+     outcome: "Do it right once: prep, patch, cut in, roll, clean up."}
+  - {code: WAVE101, dept: LIFE, title: "WaveRunner Maintenance", kind: hands_on, semester: null,
+     outcome: "Keep the fleet rental-ready: pre-ride checks, flushing, storage - from your owner's manual."}
+  - {code: STYLE101, dept: LIFE, title: "Grooming & Style", kind: hands_on, semester: null,
+     outcome: "A simple routine and a wardrobe that fits - presence for rooms you're walking into."}
+  - {code: BIO101, dept: LIFE, title: "Energy, Sleep & Recovery", kind: knowledge, semester: null,
+     outcome: "Treat sleep and training as infrastructure - especially around overnights."}
+
+exams:
+  - {code: TF_ASSOC, name: "HashiCorp Certified: Terraform Associate", provider: HashiCorp, target: S2,
+     why: "First credential that proves 'engineer'. Fast to earn alongside Systems Engineering.",
+     url: "https://developer.hashicorp.com/certifications"}
+  - {code: ISO_LI, name: "ISO/IEC 27001 Lead Implementer", provider: "an accredited certification body (e.g. PECB)", target: S3,
+     why: "The GRC-engineer credential: you build the ISMS, not just audit it. Lead Auditor can follow.",
+     url: "https://pecb.com"}
+  - {code: LSAT, name: "LSAT", provider: LSAC, target: null,
+     why: "The law-school gate. Gets its own semester with a real test date - never alongside ski season.",
+     url: "https://www.lsac.org"}
+  - {code: CISA, name: "CISA (Certified Information Systems Auditor)", provider: ISACA, target: null, optional: true,
+     why: "The audit credential hiring managers recognise for SOC 2 / ISO roles. Optional, later.",
+     url: "https://www.isaca.org"}
