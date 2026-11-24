@@ -785,13 +785,20 @@ def candidate_summary(ev, rank: int | None = None) -> None:
     c3.metric("Facts known", f"{ev.facts_known}/{ev.facts_total}")
     for f in ev.flags:
         st.caption(f"{FLAG_ICON[f.level]} {f.text}")
+    plan = Q.offer_plan(s, c, day)
+    if plan.dealbreakers:
+        st.markdown("🚫 **Walk away - don't negotiate.** " + " ".join(plan.dealbreakers))
+    elif plan.ready:
+        pre = " :gray[(preliminary - before inspection)]" if plan.preliminary else ""
+        st.markdown(f"💲 **Offers:** 🔥 great **${plan.great:,.0f}** · 🤝 fair **${plan.fair:,.0f}** · "
+                    f"🚫 walk away above **${plan.walk_away:,.0f}**{pre}")
     st.info(f"**Next step:** {ev.next_step}", icon="👉")
 
 
 def candidate_detail(ev) -> None:
     c = ev.candidate
     k = f"cd{c.id}"
-    t1, t2, t3, t4 = st.tabs(["Facts & costs", "Inspection", "Gates & decision", "History"])
+    t1, t2, tn, t3, t4 = st.tabs(["Facts & costs", "🔧 Inspection", "💲 Negotiate", "Gates & decision", "History"])
     with t1, st.form(f"cf{k}"):
         r = st.columns(3)
         r[0].text_input("Listing name", value=c.title, key=f"c_t{k}")
@@ -821,6 +828,10 @@ def candidate_detail(ev) -> None:
         r[1].text_input("Transport", value=str(c.transport_cost if c.transport_cost is not None else ""), key=f"c_tc{k}")
         r[2].text_input("Prep (registration, gear, rental-ready)", value=str(c.prep_cost if c.prep_cost is not None else ""),
                         key=f"c_pc{k}")
+        r = st.columns(2)
+        r[0].text_input("What similar units really sell for (your research, optional)",
+                        value=str(c.market_value if c.market_value is not None else ""), key=f"c_mv{k}")
+        r[1].checkbox("I can pay cash and pick it up quickly", value=c.cash_ready, key=f"c_cash{k}")
         st.text_area("What the seller said (word for word helps)", value=c.seller_statements, key=f"c_ss{k}", height=70)
         st.text_input("Why it does / doesn't suit rentals", value=c.rental_note, key=f"c_rn{k}")
         st.form_submit_button("Save facts", type="primary", on_click=act, args=(lambda s, i=c.id: Q.update_candidate(
@@ -831,25 +842,38 @@ def candidate_detail(ev) -> None:
             mechanical_condition=val(f"c_me{k}"), title_status=val(f"c_ti{k}"), trailer_included=val(f"c_tr{k}"),
             rental_suitable=val(f"c_rs{k}"), title_verified=val(f"c_tv{k}"), est_repairs=val(f"c_rp{k}", ""),
             transport_cost=val(f"c_tc{k}", ""), prep_cost=val(f"c_pc{k}", ""), seller_statements=val(f"c_ss{k}", ""),
+            market_value=val(f"c_mv{k}", ""), cash_ready=val(f"c_cash{k}", False),
             rental_note=val(f"c_rn{k}", "")), "Facts saved"))
     with t2:
-        st.caption(f"Inspection: **{AQ.inspection_state(c).replace('_', ' ')}**. Items marked ⭐ must pass. "
-                   "Bring someone who knows skis if you can.")
-        for key, text, crit in AQ.INSPECTION_ITEMS:
+        st.caption(f"Pre-purchase protocol: **{AQ.inspection_state(c).replace('_', ' ')}**. ⭐ items must pass. "
+                   "For anything that fails, add a fix-cost estimate - it feeds the offer. Mark 🚫 if it's a deal-breaker.")
+        labels = {"": "—", "pass": "✅ pass", "fail": "🔧 fail - fixable", "dealbreaker": "🚫 walk away", "na": "n/a"}
+        section = None
+        for key, sec, text, crit in AQ.PROTOCOL:
+            if sec != section:
+                section = sec
+                st.markdown(f"**{sec}**")
             cur = (c.inspection or {}).get(key, {})
-            r = st.columns([4, 1.6, 2])
+            r = st.columns([3.6, 1.6, 1, 1.8])
             r[0].markdown(f"{'⭐ ' if crit else ''}{text}")
-            opts = ["", "pass", "fail"] + ([] if crit else ["na"])
-            r[1].selectbox("Result", opts, index=opts.index(cur.get("result", "")), key=f"in{k}{key}",
-                           label_visibility="collapsed", format_func=lambda o: {"": "—", "pass": "✅ pass",
-                                                                                "fail": "❌ fail", "na": "n/a"}[o])
-            r[2].text_input("Note", value=cur.get("note", ""), key=f"inn{k}{key}", label_visibility="collapsed",
+            opts = ["", "pass", "fail", "dealbreaker"] + ([] if crit else ["na"])
+            r[1].selectbox("Result", opts, index=opts.index(cur.get("result", "")) if cur.get("result", "") in opts else 0,
+                           key=f"in{k}{key}", label_visibility="collapsed", format_func=labels.get)
+            r[2].text_input("Fix cost", value=cur.get("cost", ""), key=f"inc{k}{key}", label_visibility="collapsed",
+                            placeholder="$ fix")
+            r[3].text_input("Note", value=cur.get("note", ""), key=f"inn{k}{key}", label_visibility="collapsed",
                             placeholder="readings / notes")
-        st.button("Save inspection", key=f"insv{k}", type="primary", on_click=act, args=(lambda s, i=c.id: [
-            Q.set_inspection(s, i, key, val(f"in{k}{key}", ""), val(f"inn{k}{key}", ""))
-            for key, _, _ in AQ.INSPECTION_ITEMS
-            if val(f"in{k}{key}", "") != (c.inspection or {}).get(key, {}).get("result", "")
-            or val(f"inn{k}{key}", "") != (c.inspection or {}).get(key, {}).get("note", "")], "Inspection saved"))
+
+        def _save_inspection(s, cid=c.id, prev=dict(c.inspection or {})):
+            for key, _, _, _ in AQ.PROTOCOL:
+                res, note, cost = val(f"in{k}{key}", ""), val(f"inn{k}{key}", ""), val(f"inc{k}{key}", "")
+                old = prev.get(key, {})
+                if (res, note, cost) != (old.get("result", ""), old.get("note", ""), old.get("cost", "")):
+                    Q.set_inspection(s, cid, key, res, note, cost if res == "fail" else None)
+        st.button("Save inspection", key=f"insv{k}", type="primary", on_click=act, args=(_save_inspection,
+                                                                                         "Inspection saved"))
+    with tn:
+        negotiate_tab(c, k)
     with t3:
         for g in ev.gates:
             st.markdown(f"{'✅' if g.passed else '⬜'} **{g.name}** :gray[· {g.detail}]")
@@ -885,6 +909,62 @@ def candidate_detail(ev) -> None:
         if c.price_history:
             st.dataframe([{"day": p.day, "price": f"${p.price:,.0f}", "note": p.note} for p in c.price_history],
                          hide_index=True, use_container_width=True)
+
+
+def negotiate_tab(c, k: str) -> None:
+    plan = Q.offer_plan(s, c, day)
+    from lifeos.engines.negotiation import talk_track
+    if plan.dealbreakers:
+        st.error("🚫 **Walk away - don't negotiate.**  \n" + "  \n".join(f"• {d}" for d in plan.dealbreakers))
+    elif plan.incomplete:
+        st.warning("To work out your offers, first:  \n" + "  \n".join(f"• {d}" for d in plan.incomplete))
+    elif plan.walk_away is not None and plan.great is None:
+        st.warning("  \n".join(plan.notes))
+    else:
+        if plan.preliminary:
+            st.info("**Preliminary numbers** - the inspection isn't done yet. Use them to decide if it's worth a "
+                    "visit, but don't commit to a price until you've checked it in person.", icon="🔎")
+        m = st.columns(3)
+        m[0].metric("🔥 Great offer", f"${plan.great:,.0f}", help="Your opening number.")
+        m[1].metric("🤝 Fair offer", f"${plan.fair:,.0f}", help="Where you'd like to land.")
+        m[2].metric("🚫 Walk-away", f"${plan.walk_away:,.0f}", help="The most you'll pay. Don't say this out loud.")
+        for n in plan.notes:
+            st.caption(f"ℹ️ {n}")
+        with st.expander("How these numbers were worked out"):
+            st.markdown(f"**Starting point:** ${plan.reference:,.0f} - {plan.reference_basis}.")
+            if plan.deductions:
+                st.markdown("**Minus fixes from your inspection:**  \n" +
+                            "  \n".join(f"• {t}: −${d:,.0f}" for t, d in plan.deductions))
+            st.markdown(f"**What it's worth to you:** ${plan.value_to_you:,.0f}")
+            st.markdown("**Walk-away = the lowest of:**  \n" +
+                        "  \n".join(f"• {label}: ${v:,.0f}" for label, v in plan.caps))
+            sig = "  \n".join(f"• {label}: +{pct * 100:.0f}%" for label, pct in plan.signals) or "• none"
+            st.markdown(f"**Negotiating margin:** {plan.margin * 100:.0f}% (8% base + leverage, max 20%)  \n{sig}")
+            st.caption("Great offer = walk-away minus the full margin · fair offer = minus half · rounded down to $25.")
+        script = talk_track(c, plan)
+        st.markdown("**What to say**")
+        st.text_area("Talk track", value=script, key=f"tt{k}", height=230, label_visibility="collapsed")
+        st.button("📨 Use as tomorrow's ask", key=f"ask{k}", on_click=act, args=(lambda s, i=c.id: DC_set_ask(
+            s, c, plan, val(f"tt{k}", script)), "Saved as tomorrow's ask - it's on Today's evening check"))
+    st.divider()
+    st.markdown("**Offer log**")
+    for e in Q.negotiation_log(s, c):
+        st.caption(f"{e.at:%b %d}: {e.from_value} → {e.to_value}" + (f" · {e.reason}" if e.reason else ""))
+    r = st.columns([1.2, 1.4, 1.2, 2.4, 1])
+    r[0].text_input("Offered", key=f"of{k}", placeholder="$")
+    r[1].selectbox("Their answer", list(Q.RESPONSES), key=f"or{k}",
+                   format_func=lambda x: {"accepted": "✅ accepted", "countered": "↩️ countered", "declined": "✗ declined",
+                                          "no_reply": "… no reply"}[x])
+    r[2].text_input("Counter", key=f"oc{k}", placeholder="$")
+    r[3].text_input("Note", key=f"on{k}", placeholder="what they said")
+    r[4].button("Record", key=f"orb{k}", on_click=act, args=(lambda s, i=c.id: Q.record_offer(
+        s, i, val(f"of{k}", ""), val(f"or{k}"), val(f"oc{k}", ""), val(f"on{k}", "")), "Offer recorded"))
+
+
+def DC_set_ask(s_, c, plan, script: str):
+    return D.set_ask(s_, for_date=day + dt.timedelta(days=1), today=day, who=f"Seller · {c.title}", area="price",
+                     what=f"${plan.great:,.0f} (fallback ${plan.fair:,.0f}; walk away above ${plan.walk_away:,.0f})",
+                     script=script)
 
 
 def page_deals() -> None:

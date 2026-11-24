@@ -30,15 +30,18 @@ ADDITIVE_COLUMNS = [
     ("goals", "vision_id", "INTEGER REFERENCES visions(id)"),
     ("tasks", "key_result_id", "INTEGER REFERENCES key_results(id)"),
     ("recurring_templates", "key_result_id", "INTEGER REFERENCES key_results(id)"),
+    ("acquisition_candidates", "market_value", "VARCHAR(40)"),
+    ("acquisition_candidates", "cash_ready", "BOOLEAN DEFAULT 0"),
 ]
 
 
 def _add_missing_columns(engine: Engine) -> list[str]:
     added = []
     insp = inspect(engine)
+    tables = set(insp.get_table_names())
     with engine.begin() as conn:
         for table, column, ddl in ADDITIVE_COLUMNS:
-            if column not in {c["name"] for c in insp.get_columns(table)}:
+            if table in tables and column not in {c["name"] for c in insp.get_columns(table)}:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
                 added.append(f"{table}.{column}")
     return added

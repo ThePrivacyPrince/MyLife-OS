@@ -146,3 +146,20 @@ def missed_twice(s: Session, today: dt.date) -> bool:
     """'Never miss twice': no check for yesterday's plan of today AND none for today's plan of tomorrow."""
     return get_check(s, today) is None and get_check(s, today - dt.timedelta(days=1)) is None and \
         s.scalar(select(DailyCheck).limit(1)) is not None
+
+
+def set_ask(s: Session, *, for_date: dt.date, today: dt.date, who: str, area: str, what: str, script: str) -> DailyCheck:
+    """Fill just the 'ask' part of a day's evening check (keeps progress and capacity answers untouched)."""
+    if for_date < today:
+        raise ValidationError("You can only plan today or a future day.")
+    if area not in ASK_AREAS:
+        raise ValidationError(f"Area is one of {ASK_AREAS}.")
+    if not (who.strip() and what.strip() and script.strip()):
+        raise ValidationError("An ask needs who, what, and the words you'll say.")
+    check = get_check(s, for_date) or DailyCheck(for_date=for_date, bump_task_ids=[])
+    check.no_ask = False
+    check.ask_who, check.ask_area, check.ask_what, check.ask_script = who.strip(), area, what.strip(), script.strip()
+    check.ask_result = None
+    s.add(check)
+    s.flush()
+    return check

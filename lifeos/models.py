@@ -475,6 +475,8 @@ class AcquisitionCandidate(Base):
     transport_cost: Mapped[Decimal | None] = mapped_column(DecimalText)
     prep_cost: Mapped[Decimal | None] = mapped_column(DecimalText)  # registration, safety gear, rental-ready work
     rental_suitable: Mapped[str] = mapped_column(String(8), default="unknown")        # unknown|yes|no
+    market_value: Mapped[Decimal | None] = mapped_column(DecimalText)  # what similar units really sell for (your research)
+    cash_ready: Mapped[bool] = mapped_column(Boolean, default=False)   # you can pay cash and pick up quickly
     rental_note: Mapped[str] = mapped_column(Text, default="")
     inspection: Mapped[dict] = mapped_column(JSON, default=dict)  # item -> {"result": pass|fail|na, "note": ""}
     funding_fund_id: Mapped[int | None] = mapped_column(ForeignKey("funds.id"))

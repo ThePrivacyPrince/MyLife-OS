@@ -45,3 +45,39 @@ A cheap scam can never outrank a clean listing.
 The purchase fund lives on **💰 Money → 💼 Business**.
 
 Tests: `tests/unit/test_acquisitions.py` (ACQ-01..12), `test_int21`.
+
+## Pre-purchase protocol and offers (the 💲 Negotiate tab)
+
+**🔧 Inspection protocol**, in the order you'd do it:
+
+📄 Paperwork → 🛥️ On the trailer → ⚙️ Engine bay → 🔑 Engine test → 🌊 Water test → 🚚 Trailer
+
+- Each item is marked ✅ pass, 🔧 fail - fixable (with a **fix-cost estimate**), 🚫 walk away, or n/a. ⭐ critical items can't be n/a.
+- Fix costs add up into the listing's repairs.
+- A critical item that fails with a priced fix still passes, as **"passed with fixes"**.
+- A deal-breaker, or a critical failure with no estimate, fails the inspection.
+
+**💲 Offers**, all shown step by step:
+- **Starting point:** the asking price, or what similar units sell for if that's lower. That comes from your market research, or the median of 2+ clean listings of the same model; red-flag listings are never counted.
+- **What it's worth to you** = starting point − fix costs.
+- **🚫 Walk-away** = the lowest of: what it's worth to you, your price ceiling, and what your purchase fund covers after repairs, transport and prep. Protected reserves never count.
+- **The negotiating margin** starts at 8%. Each leverage signal adds to it, up to a maximum of 20%:
+
+  | Signal | Adds |
+  |---|---|
+  | Listed 30+ days | +3% |
+  | Price already dropped | +2% |
+  | Off-season (Oct–Mar) | +3% |
+  | Cash and quick pickup | +2% |
+  | Minor issues found | +2% |
+  | High hours | +2% |
+- **🔥 Great offer** = walk-away − the full margin (your opening number). **🤝 Fair offer** = walk-away − half the margin. Both are rounded down to $25.
+- **Deal-breakers** (missing/salvage/lien title, scam wording, a poor hull, or anything you marked 🚫) mean **no prices at all: walk away**.
+- **Unknowns** (asking price, or a fix cost not estimated yet) block the math. It never guesses.
+- **Before the inspection is done**, numbers are labeled **preliminary**, and the talk track stays non-committal.
+
+**What to say:** a talk track built from your findings and leverage. The walk-away is marked "for you only".
+**📨 Use as tomorrow's ask** puts it in tomorrow's evening check. It only changes the ask; the rest of the plan is kept.
+**Offer log:** record each offer and their answer (accepted / countered with an amount / declined / no reply).
+
+Tests: `tests/unit/test_negotiation.py` (NEG-01..11).

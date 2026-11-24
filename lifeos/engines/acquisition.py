@@ -17,21 +17,30 @@ YES_NO = ("unknown", "yes", "no")
 STAGES = ("found", "contacted", "inspecting", "negotiating", "approved", "owned", "passed")
 ACTIVE_STAGES = ("found", "contacted", "inspecting", "negotiating", "approved")
 
-# A general used-PWC inspection. "critical" items must pass for the inspection gate.
-INSPECTION_ITEMS: list[tuple[str, str, bool]] = [
-    ("hin_match", "Hull ID (HIN) on the hull matches the title and registration", True),
-    ("compression", "Compression test: every cylinder in spec and close to each other", True),
-    ("water_test", "Water test: starts easily, reaches full throttle, no overheating or warning lights", True),
-    ("hull", "Hull: no cracks, soft spots or major repairs (check underneath and around the pump)", True),
-    ("pump", "Pump, impeller and wear ring: no heavy wear or chips", True),
-    ("bilge", "Engine bay: no excess water, oil or fuel smell after riding", True),
-    ("cooling", "Cooling: steady tell-tale (pee) stream when running", True),
-    ("controls", "Steering, throttle and (if fitted) brake/reverse work smoothly", False),
-    ("electrics", "Battery, gauges and charging work", False),
-    ("history", "Service records / maintenance history seen", False),
-    ("trailer", "Trailer: lights, bearings, tires, title/registration (if included)", False),
+# A general used-PWC pre-purchase protocol, in the order you'd do it. (key, section, text, critical)
+# Existing keys are kept so earlier inspections stay valid. Critical items must pass for the inspection gate.
+PROTOCOL: list[tuple[str, str, str, bool]] = [
+    ("hin_match", "📄 Paperwork", "Hull ID (HIN) on the hull matches the title and registration", True),
+    ("title_id", "📄 Paperwork", "Name on the title matches the seller's photo ID", True),
+    ("history", "📄 Paperwork", "Service records / maintenance history seen", False),
+    ("hull", "🛥️ On the trailer", "Hull: no cracks, soft spots or major repairs (check underneath and around the pump)", True),
+    ("pump", "🛥️ On the trailer", "Pump, impeller and wear ring: no heavy wear, chips or gap", True),
+    ("intake", "🛥️ On the trailer", "Intake grate and ride plate straight and secure", False),
+    ("cosmetic", "🛥️ On the trailer", "Seat, hood latch, storage and hull finish (cosmetic)", False),
+    ("leaks", "⚙️ Engine bay", "No fuel or oil leaks, no strong fuel smell", True),
+    ("corrosion", "⚙️ Engine bay", "No heavy corrosion; hoses and clamps in good shape", False),
+    ("electrics", "⚙️ Engine bay", "Battery, gauges and charging work", False),
+    ("compression", "🔑 Engine test", "Compression test: every cylinder in spec and close to each other", True),
+    ("cold_start", "🔑 Engine test", "Starts easily from cold, idles smoothly, no warning lights", False),
+    ("water_test", "🌊 Water test", "Reaches full throttle and top speed, no overheating or limp mode", True),
+    ("cooling", "🌊 Water test", "Steady tell-tale (pee) stream while running", True),
+    ("controls", "🌊 Water test", "Steering, throttle and brake/reverse work smoothly", False),
+    ("bilge", "🌊 Water test", "Engine bay: no excess water after riding", True),
+    ("trailer", "🚚 Trailer", "Trailer lights, bearings, tires, winch/straps and paperwork (if included)", False),
 ]
-CRITICAL = {k for k, _, crit in INSPECTION_ITEMS if crit}
+INSPECTION_ITEMS: list[tuple[str, str, bool]] = [(k, txt, crit) for k, _, txt, crit in PROTOCOL]
+CRITICAL = {k for k, _, _, crit in PROTOCOL if crit}
+RESULTS = ("", "pass", "fail", "dealbreaker", "na")
 SCAM_PHRASES = ("deposit", "shipping", "ship it", "western union", "gift card", "zelle only before", "lost title",
                 "no title", "bill of sale only", "out of the country", "military deployment")
 SOFT_CLAIMS = ("runs great", "runs good", "ran when parked", "just needs", "easy fix", "needs battery")
@@ -71,23 +80,32 @@ def known_facts(c) -> tuple[int, int, list[str]]:
         v = getattr(c, f)
         if v is None or v == "unknown":
             missing.append(f.replace("_", " "))
-    insp = inspection_state(c)
-    if insp != "passed":
+    if not inspected(c):
         missing.append("inspection")
     total = len(KEY_FACTS) + 1
     return total - len(missing), total, missing
 
 
 def inspection_state(c) -> str:
-    """not_started | in_progress | failed | passed (all critical items pass)."""
+    """not_started | in_progress | failed | passed | passed_with_fixes.
+
+    A critical item that fails but has a fix-cost estimate is a known, priced repair: the ski can still pass
+    ('passed_with_fixes') and the cost flows into repairs and the offer. A deal-breaker, or a critical failure
+    with no estimate yet, means 'failed'."""
     res = c.inspection or {}
     if not res:
         return "not_started"
-    if any(v.get("result") == "fail" for k, v in res.items() if k in CRITICAL):
+    if any(v.get("result") == "dealbreaker" for v in res.values()):
         return "failed"
-    if all(res.get(k, {}).get("result") == "pass" for k in CRITICAL):
-        return "passed"
+    if any(v.get("result") == "fail" and not v.get("cost") for k, v in res.items() if k in CRITICAL):
+        return "failed"
+    if all(res.get(k, {}).get("result") in ("pass", "fail") for k in CRITICAL):
+        return "passed_with_fixes" if any(v.get("result") == "fail" for v in res.values()) else "passed"
     return "in_progress"
+
+
+def inspected(c) -> bool:
+    return inspection_state(c) in ("passed", "passed_with_fixes")
 
 
 @dataclass(frozen=True)
@@ -99,9 +117,9 @@ class Flag:
 def risk_flags(c, today: dt.date, *, peers: list = (), high_hours: int = 250) -> list[Flag]:
     flags: list[Flag] = []
     said = (c.seller_statements or "").lower()
-    if c.mechanical_condition in ("good", "fair") and inspection_state(c) != "passed":
+    if c.mechanical_condition in ("good", "fair") and not inspected(c):
         flags.append(Flag("caution", "Mechanical condition is the seller's word only - not verified by inspection."))
-    if any(p in said for p in SOFT_CLAIMS) and inspection_state(c) != "passed":
+    if any(p in said for p in SOFT_CLAIMS) and not inspected(c):
         flags.append(Flag("caution", "Seller uses soft claims ('runs great', 'just needs…') - verify with a compression "
                                      "and water test."))
     if any(p in said for p in SCAM_PHRASES):
@@ -118,7 +136,7 @@ def risk_flags(c, today: dt.date, *, peers: list = (), high_hours: int = 250) ->
     if c.hull_condition == "poor":
         flags.append(Flag("risk", "Hull in poor condition."))
     if inspection_state(c) == "failed":
-        flags.append(Flag("risk", "Failed a critical inspection item."))
+        flags.append(Flag("risk", "Inspection failed: a deal-breaker, or a critical problem with no fix estimate yet."))
     price = working_price(c)
     same = [working_price(p) for p in peers if p.id != c.id and p.model and p.model.lower() == (c.model or "").lower()
             and working_price(p)]
@@ -163,7 +181,8 @@ def gates(c, *, max_price: Decimal | None, fund_balance: Decimal | None, fund_pr
                   if c.title_status == "clean" and c.title_verified else
                   f"Title: {c.title_status}{'' if c.title_verified else ' · not verified in person'}"))
     st = inspection_state(c)
-    g.append(Gate("inspection", "Mechanical inspection", st == "passed", f"Inspection {st.replace('_', ' ')}"))
+    g.append(Gate("inspection", "Mechanical inspection", st in ("passed", "passed_with_fixes"),
+                  f"Inspection {st.replace('_', ' ')}"))
     g.append(Gate("suitability", "Suits rentals", c.rental_suitable == "yes",
                   c.rental_note or {"unknown": "Not assessed (seats, reliability, parts availability)",
                                     "no": "Assessed: not suitable"}.get(c.rental_suitable, "")))

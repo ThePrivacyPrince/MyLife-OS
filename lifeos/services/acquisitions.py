@@ -14,7 +14,7 @@ from lifeos.errors import NotFound, ReasonRequired, ValidationError
 from lifeos.models import AcquisitionCandidate, CandidatePrice, Fund, PlanEvent
 from lifeos.services import money as M
 
-MONEY_FIELDS = ("asking_price", "est_repairs", "transport_cost", "prep_cost", "offer", "agreed_price")
+MONEY_FIELDS = ("asking_price", "est_repairs", "transport_cost", "prep_cost", "offer", "agreed_price", "market_value")
 CHOICE_FIELDS = {"hull_condition": A.CONDITIONS, "mechanical_condition": A.CONDITIONS,
                  "title_status": A.TITLE_STATUSES, "trailer_included": A.YES_NO, "rental_suitable": A.YES_NO}
 TEXT_FIELDS = ("title", "source", "url", "manufacturer", "model", "location", "seller_statements", "rental_note",
@@ -54,7 +54,7 @@ def _apply(c: AcquisitionCandidate, values: dict) -> list[str]:
                 raise ValidationError("That year doesn't look right.")
         elif k in TEXT_FIELDS:
             v = (v or "").strip()
-        elif k == "title_verified":
+        elif k in ("title_verified", "cash_ready"):
             v = bool(v)
         else:
             raise ValidationError(f"Unknown field '{k}'.")
@@ -93,12 +93,13 @@ def update_candidate(s: Session, cid: int, *, today: dt.date, **values) -> list[
     return changed
 
 
-def set_inspection(s: Session, cid: int, item: str, result: str, note: str = "") -> None:
-    keys = {k for k, _, _ in A.INSPECTION_ITEMS}
+def set_inspection(s: Session, cid: int, item: str, result: str, note: str = "", cost=None) -> None:
+    """Record one protocol item. A fix-cost estimate on failed items feeds repairs and the offer math."""
+    keys = {k for k, _, _, _ in A.PROTOCOL}
     if item not in keys:
         raise ValidationError(f"Unknown inspection item '{item}'.")
-    if result not in ("pass", "fail", "na", ""):
-        raise ValidationError("Result is pass, fail or na.")
+    if result not in A.RESULTS:
+        raise ValidationError("Result is pass, fail, dealbreaker or na.")
     if result == "na" and item in A.CRITICAL:
         raise ValidationError("A critical item can't be skipped as N/A.")
     c = get(s, cid)
@@ -106,11 +107,20 @@ def set_inspection(s: Session, cid: int, item: str, result: str, note: str = "")
     if result == "":
         data.pop(item, None)
     else:
-        data[item] = {"result": result, "note": note.strip()}
+        entry = {"result": result, "note": (note or "").strip()}
+        if result == "fail" and cost not in (None, ""):
+            entry["cost"] = str(M.money(cost))
+        data[item] = entry
     c.inspection = data
+    costs = [Decimal(v["cost"]) for v in data.values() if v.get("result") == "fail" and v.get("cost")]
+    if costs:
+        c.est_repairs = sum(costs, Decimal(0))
+    elif not any(v.get("result") == "fail" for v in data.values()) and data and c.est_repairs is None \
+            and A.inspection_state(c) == "passed":  # clean pass
+        c.est_repairs = Decimal(0)  # clean inspection: no known repairs
     if c.stage in ("found", "contacted") and data:
         c.stage = "inspecting"
-    _log(s, c, "inspection", to=f"{item}={result}", reason=note or None)
+    _log(s, c, "inspection", to=f"{item}={result}" + (f" ${cost}" if cost not in (None, "") else ""), reason=note or None)
     s.flush()
 
 
@@ -236,3 +246,65 @@ def add_owned(s: Session, *, title: str, today: dt.date, **values) -> Acquisitio
 def fleet(s: Session) -> list[AcquisitionCandidate]:
     return list(s.scalars(select(AcquisitionCandidate).where(AcquisitionCandidate.stage == "owned")
                           .order_by(AcquisitionCandidate.id)))
+
+
+# ---------------------------------------------------------------- negotiation
+def comparable_prices(s: Session, c: AcquisitionCandidate) -> list[Decimal]:
+    """Prices of other listings of the same model that have no red flags (a scam or bad title never sets 'market')."""
+    out = []
+    for x in s.scalars(select(AcquisitionCandidate)):
+        if x.id == c.id or not (x.model and c.model) or x.model.lower() != c.model.lower() or x.stage == "passed":
+            continue
+        if not A.working_price(x):
+            continue
+        if any(f.level == "risk" for f in A.risk_flags(x, x.first_seen)):
+            continue
+        out.append(A.working_price(x))
+    return out
+
+
+def comps_median(s: Session, c: AcquisitionCandidate) -> Decimal | None:
+    import statistics
+    prices = comparable_prices(s, c)
+    return Decimal(str(statistics.median(prices))) if len(prices) >= 2 else None
+
+
+def offer_plan(s: Session, c: AcquisitionCandidate, today: dt.date):
+    from lifeos.engines.negotiation import plan_offers
+    cfg = settings(s)
+    fund = c.funding_fund
+    bal = M.balance(fund) if fund and fund.space not in M.PROTECTED_SPACES else None
+    plan = plan_offers(c, today=today, comps_median=comps_median(s, c), ceiling=cfg["max_price"],
+                       fund_balance=bal, high_hours=cfg["high_hours"])
+    n = len(comparable_prices(s, c))
+    if "median of similar listings" in plan.reference_basis:
+        plan.reference_basis = plan.reference_basis.replace("the median of similar listings",
+                                                            f"the median of {n} similar clean listings")
+    return plan
+
+
+RESPONSES = ("accepted", "countered", "declined", "no_reply")
+
+
+def record_offer(s: Session, cid: int, offer, response: str, counter=None, note: str = "") -> None:
+    c = get(s, cid)
+    if response not in RESPONSES:
+        raise ValidationError(f"Response is one of {RESPONSES}.")
+    amt = M.money(offer)
+    ctr = M.money(counter) if counter not in (None, "") else None
+    if response == "countered" and ctr is None:
+        raise ValidationError("What did they counter with?")
+    c.offer = amt
+    if response == "accepted":
+        c.agreed_price = amt
+    if c.stage in ("found", "contacted", "inspecting"):
+        c.stage = "negotiating"
+    _log(s, c, "negotiation", frm=f"offered ${amt:,.0f}", to=response + (f" ${ctr:,.0f}" if ctr else ""),
+         reason=note.strip() or None)
+    s.flush()
+
+
+def negotiation_log(s: Session, c: AcquisitionCandidate) -> list[PlanEvent]:
+    return list(s.scalars(select(PlanEvent).where(PlanEvent.entity_type == "candidate",
+                                                  PlanEvent.entity_code == f"C{c.id}",
+                                                  PlanEvent.event_type == "negotiation").order_by(PlanEvent.id)))
