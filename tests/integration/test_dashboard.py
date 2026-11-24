@@ -223,3 +223,22 @@ def test_int17_all_tasks_views(seeded_db, view):
         done = [b for b in at.button if b.label in ("○", "✓")]
         done[0].click().run()
         assert not at.exception
+
+
+@pytest.mark.parametrize("view", ["By pillar", "Roadmap", "Chart"])
+def test_int18_timeline_views(seeded_db, view):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Timeline").run()
+    at.session_state["tl_view"] = view
+    at.run()
+    assert not at.exception, at.exception
+
+
+def test_int19_set_a_deadline_from_the_timeline(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Timeline").run()
+    [b for b in at.button if b.label == "Set"][0].click().run()
+    assert not at.exception
+    assert any("Deadline set" in x.value for x in at.success), [e.value for e in at.error]

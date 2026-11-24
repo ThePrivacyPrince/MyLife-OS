@@ -73,3 +73,17 @@ Every row has ○ to mark it done and the ✏️ edit pop-up. The priority gate 
 - **Table:** the original sortable list.
 - **Not listed:** protected commitments (sleep, shifts).
 - **Sidebar filters** still work: pillar, and one-time vs recurring.
+
+## Timeline: every pillar, three views
+The top of the page shows four counts (next 30 days, next 12 months, goals without a date, deadlines moved),
+then a **Coming up** strip with the nearest four deadlines across all pillars.
+
+- **By pillar** (default): a drop-down per pillar. The header gives the count, the next deadline, and how many goals have no date.
+  - Pillars with something due within 30 days, or past due, open automatically.
+  - **Goals without a deadline** can be given one right there: pick a date, then **Set**. A first deadline needs no reason.
+- **Roadmap:** deadlines grouped by quarter, then month. Only this quarter and next open; later quarters stay collapsed.
+- **Chart:** one bar per goal and objective, from start to deadline, colored by pillar, with a dotted *today* line. Hover for details.
+  - Visions are hidden by default (they stretch the scale to years). Tick **Include 3-5 year visions** to add them.
+  - The pillar colors were checked for color-blind safety. Each bar is labeled, so color is never the only cue.
+
+Task due dates stay in the Planner and All tasks, so the Timeline remains about the big commitments.

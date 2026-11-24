@@ -66,3 +66,48 @@ def group_by_pillar(tasks: Iterable[Task], pillar_codes: list[str], today: dt.da
             items.sort(key=lambda t: (t.priority, t.due_date or dt.date.max, t.effective_date or dt.date.max, t.id))
     return [groups[c] for c in pillar_codes if c in groups] + \
         [g for c, g in groups.items() if c not in pillar_codes]
+
+
+# ---------------------------------------------------------------- timeline by pillar
+def quarter_label(d: dt.date) -> str:
+    return f"Q{(d.month - 1) // 3 + 1} {d.year}"
+
+
+def quarter_start(d: dt.date) -> dt.date:
+    return dt.date(d.year, 3 * ((d.month - 1) // 3) + 1, 1)
+
+
+@dataclass
+class PillarTimeline:
+    code: str
+    deadlines: list = field(default_factory=list)      # cascade Deadline objects, soonest first
+    undated_goals: list = field(default_factory=list)  # active goals with no deadline yet
+
+    def next_up(self, today: dt.date):
+        upcoming = [d for d in self.deadlines if d.date >= today]
+        return upcoming[0] if upcoming else None
+
+    def overdue(self, today: dt.date) -> list:
+        return [d for d in self.deadlines if d.date < today]
+
+    def due_within(self, today: dt.date, days: int) -> list:
+        return [d for d in self.deadlines if today <= d.date <= today + dt.timedelta(days=days)]
+
+
+def pillar_of_code(code: str) -> str:
+    return code.split("-", 1)[0]
+
+
+def timeline_by_pillar(s, pillar_codes: list[str], today: dt.date) -> list[PillarTimeline]:
+    from sqlalchemy import select
+    from lifeos.models import Goal
+    from lifeos.services.cascade import upcoming_deadlines
+    out = {c: PillarTimeline(c) for c in pillar_codes}
+    for d in upcoming_deadlines(s, today):
+        p = pillar_of_code(d.code)
+        if p in out:
+            out[p].deadlines.append(d)
+    for g in s.scalars(select(Goal).where(Goal.status == "active", Goal.target_date.is_(None)).order_by(Goal.code)):
+        if g.pillar_code in out:
+            out[g.pillar_code].undated_goals.append(g)
+    return [out[c] for c in pillar_codes]

@@ -35,3 +35,19 @@ def test_viw02_grouped_by_pillar_sorted_and_counted(s, mk, today):
     assert (fin.open_count, fin.p1_count, fin.urgent) == (2, 1, True)
     assert groups["ENV"].open_count == 0, "protected commitments aren't to-dos"
     assert groups["REL"].buckets["no_date"][0].title == "Text Amari's coach" and not groups["REL"].urgent
+
+
+def test_viw03_timeline_by_pillar_and_undated_goals(s, today):
+    from lifeos.services import cascade as C
+    from lifeos.services.seed import seed
+    from lifeos.services.views import quarter_label, quarter_start, timeline_by_pillar
+    seed(s, today)
+    C.create_vision(s, pillar="FIN", title="Debt-free", target_year=2030, today=today)
+    C.change_deadline(s, "goal", "FIN-G003", today + dt.timedelta(days=20))
+    groups = {g.code: g for g in timeline_by_pillar(s, PILLARS, today)}
+    fin = groups["FIN"]
+    assert [d.code for d in fin.deadlines] == ["FIN-G003", "FIN-V1"], "soonest first"
+    assert fin.next_up(today).code == "FIN-G003" and fin.due_within(today, 30)
+    assert "FIN-G003" not in [g.code for g in fin.undated_goals] and len(fin.undated_goals) == 4
+    assert groups["BUS"].deadlines[0].code == "BUS-G001"
+    assert quarter_label(dt.date(2027, 5, 31)) == "Q2 2027" and quarter_start(dt.date(2027, 5, 31)) == dt.date(2027, 4, 1)

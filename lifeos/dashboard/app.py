@@ -1452,37 +1452,145 @@ def page_plan() -> None:
             s, val("r_g"), val("r_v")), "Goal connected"))
 
 
-def page_timeline() -> None:
-    st.title("Timeline")
-    st.caption("Every commitment with a date, soonest first. Deadlines only move with a reason, so nothing "
-               "quietly resets.")
-    road = [d for d in C.upcoming_deadlines(s, day)
-            if not pillar_filter or d.code.split("-")[0] in pillar_filter]
-    if not road:
-        st.info("No deadlines yet. Add a vision, goal or objective on the **Plan** page - each one starts a countdown.")
+TIER_ICON = {"vision": "🔭", "goal": "🎯", "objective": "📅"}
+# Categorical slots 1-5 of the validated chart palette, in fixed pillar order (dataviz validator: PASS on #fbfaf7;
+# three slots sit below 3:1 contrast, so every bar carries a visible text label and By pillar is the table view).
+PILLAR_COLORS = {"BUS": "#2a78d6", "REL": "#eb6834", "ENV": "#1baf7a", "FIN": "#eda100", "EDU": "#e87ba4"}
+
+
+def _deadline_line(d, show_pillar: bool = False) -> None:
+    cd = d.countdown
+    pill = f"{ICON.get(d.code.split('-')[0], '')} " if show_pillar else ""
+    moved = f" · moved {d.moves}×" if d.moves else ""
+    st.markdown(f"{pill}{TIER_ICON[d.tier]} **{d.title}** :gray[· {TIER_LABELS[d.tier].split(' (')[0]} · due "
+                f"{d.date:%a %b} {d.date.day}, {d.date.year}{moved}]")
+    st.progress(cd.elapsed_fraction, text=f"{CD_ICON[cd.state]} {cd.label.split(' (')[0]} · "
+                                          f"{cd.elapsed_fraction:.0%} of the time used")
+
+
+def timeline_by_pillar_view(groups) -> None:
+    for g in groups:
+        name = s.get(Pillar, g.code).name
+        nxt = g.next_up(day)
+        bits = [f"{len(g.deadlines)} deadline{'s' if len(g.deadlines) != 1 else ''}"]
+        if g.overdue(day):
+            bits.append(f"{len(g.overdue(day))} past due")
+        if nxt:
+            bits.append(f"next: {_short(nxt.title, 40)} ({nxt.countdown.label.split(' (')[0].lower()})")
+        if g.undated_goals:
+            bits.append(f"{len(g.undated_goals)} goal{'s' if len(g.undated_goals) != 1 else ''} without a date")
+        urgent = bool(g.overdue(day) or g.due_within(day, 30))
+        with st.expander(f"{ICON.get(g.code, '')} {name} · " + " · ".join(bits), expanded=urgent):
+            if not g.deadlines and not g.undated_goals:
+                st.caption("Nothing planned here yet - add a vision or goal on the **Plan** page.")
+            for d in g.deadlines:
+                _deadline_line(d)
+            if g.undated_goals:
+                st.markdown("**🗓️ Goals without a deadline** :gray[- give each a date so it counts down]")
+                for goal in g.undated_goals:
+                    r = st.columns([3, 1.4, 0.8])
+                    r[0].markdown(f"🎯 {goal.code} · {goal.title}")
+                    r[1].date_input("Deadline", value=day + dt.timedelta(days=270), key=f"ud{goal.id}",
+                                    label_visibility="collapsed")
+                    r[2].button("Set", key=f"udb{goal.id}", on_click=act, args=(
+                        lambda s, c=goal.code, i=goal.id: C.change_deadline(s, "goal", c, val(f"ud{i}")),
+                        "Deadline set - it's counting down"))
+
+
+def timeline_roadmap_view(groups) -> None:
+    from lifeos.services.views import quarter_label, quarter_start
+    items = sorted((d for g in groups for d in g.deadlines), key=lambda d: d.date)
+    past = [d for d in items if d.date < day]
+    if past:
+        with st.expander(f"🔴 Past deadline ({len(past)})", expanded=True):
+            for d in past:
+                _deadline_line(d, show_pillar=True)
+    this_q = quarter_start(day)
+    next_q = quarter_start(this_q + dt.timedelta(days=95))
+    by_q: dict[dt.date, list] = {}
+    for d in items:
+        if d.date >= day:
+            by_q.setdefault(quarter_start(d.date), []).append(d)
+    if not by_q and not past:
+        st.caption("No dated plans yet.")
+    for q, ds in sorted(by_q.items()):
+        icons = " ".join(sorted({ICON.get(d.code.split('-')[0], '') for d in ds}))
+        with st.expander(f"{quarter_label(q)} · {len(ds)} deadline{'s' if len(ds) != 1 else ''} · {icons}",
+                         expanded=q in (this_q, next_q)):
+            month = None
+            for d in ds:
+                if d.date.month != month:
+                    month = d.date.month
+                    st.markdown(f"**{d.date:%B}**")
+                _deadline_line(d, show_pillar=True)
+
+
+def timeline_chart_view(groups) -> None:
+    import altair as alt
+    include_visions = st.checkbox("Include 3-5 year visions", value=False,
+                                  help="Visions stretch the scale to years; leave off to see the next 12 months clearly.")
+    rows = []
+    for g in groups:
+        for d in g.deadlines:
+            if d.tier == "vision" and not include_visions:
+                continue
+            rows.append({"item": f"{TIER_ICON[d.tier]} {_short(d.title, 44)}", "pillar": s.get(Pillar, g.code).name,
+                         "start": max(d.countdown.start, day - dt.timedelta(days=30)).isoformat(),
+                         "deadline": d.date.isoformat(), "tier": TIER_LABELS[d.tier],
+                         "left": d.countdown.label.split(" (")[0], "order": f"{g.code}-{d.date}"})
+    if not rows:
+        st.caption("No dated plans to chart yet.")
         return
-    overdue = [d for d in road if d.countdown.state == "overdue"]
-    if overdue:
-        st.error(f"{len(overdue)} commitment(s) past their deadline - close each out (achieved / missed) or move "
-                 "the deadline with a reason on the Plan page.")
-    c = st.columns(3)
-    c[0].metric("Next 30 days", sum(1 for d in road if 0 <= (d.date - day).days <= 30))
-    c[1].metric("Next 12 months", sum(1 for d in road if 0 <= (d.date - day).days <= 365))
-    c[2].metric("Deadlines moved", sum(d.moves for d in road))
-    tier_icon = {"vision": "🔭", "goal": "🎯", "objective": "📅"}
-    current = None
-    for d in road:
-        bucket = "Past deadline" if d.countdown.state == "overdue" else f"{d.date:%B %Y}"
-        if bucket != current:
-            st.subheader(bucket)
-            current = bucket
-        with st.container(border=True):
-            cols = st.columns([5, 2])
-            cols[0].markdown(f"{tier_icon[d.tier]} **{d.title}**")
-            cols[0].caption(f"{TIER_LABELS[d.tier]} · {d.code} · due {d.date:%a %b %d, %Y}"
-                            + (f" · moved {d.moves}×" if d.moves else ""))
-            cols[1].markdown(f"{CD_ICON[d.countdown.state]} **{d.countdown.label.split(' (')[0]}**")
-            st.progress(d.countdown.elapsed_fraction, text=f"{d.countdown.elapsed_fraction:.0%} of the time used")
+    names = [s.get(Pillar, c).name for c in PILLAR_COLORS]
+    color = alt.Color("pillar:N", scale=alt.Scale(domain=names, range=list(PILLAR_COLORS.values())),
+                      legend=alt.Legend(orient="top", title=None))
+    y = alt.Y("item:N", sort=alt.EncodingSortField("order"), title=None,
+              axis=alt.Axis(labelLimit=320, labelColor="#1f2421", domain=False, ticks=False))
+    bars = alt.Chart(alt.Data(values=rows)).mark_bar(size=14, cornerRadius=4).encode(
+        x=alt.X("start:T", title=None, axis=alt.Axis(format="%b %Y", grid=True, gridColor="#ecebe6",
+                                                     domain=False, labelColor="#6b6f6c")),
+        x2="deadline:T", y=y, color=color,
+        tooltip=[alt.Tooltip("item:N", title="Item"), alt.Tooltip("pillar:N", title="Pillar"),
+                 alt.Tooltip("tier:N", title="Tier"), alt.Tooltip("deadline:T", title="Deadline", format="%b %d, %Y"),
+                 alt.Tooltip("left:N", title="Time left")])
+    today_rule = alt.Chart(alt.Data(values=[{"d": day.isoformat()}])).mark_rule(
+        color="#1f2421", strokeWidth=2, strokeDash=[4, 3]).encode(x="d:T")
+    today_text = alt.Chart(alt.Data(values=[{"d": day.isoformat(), "t": "today"}])).mark_text(
+        align="left", dx=4, dy=-6, color="#6b6f6c", fontSize=11).encode(x="d:T", y=alt.value(0), text="t:N")
+    st.altair_chart((bars + today_rule + today_text).properties(height=max(120, 30 * len(rows))).configure_view(
+        stroke=None), use_container_width=True)
+    st.caption("Each bar runs from when the item started to its deadline. Hover a bar for details. The same items, "
+               "as text, are in **By pillar**.")
+
+
+def page_timeline() -> None:
+    from lifeos.services.views import timeline_by_pillar
+    st.title("Timeline")
+    st.caption("Visions, goals and objectives with deadlines. Deadlines only move with a reason, so nothing "
+               "quietly resets. Task due dates live in the Planner and All tasks.")
+    codes = [c for c in _pillar_options() if not pillar_filter or c in pillar_filter]
+    groups = timeline_by_pillar(s, codes, day)
+    every = sorted((d for g in groups for d in g.deadlines), key=lambda d: d.date)
+    undated = sum(len(g.undated_goals) for g in groups)
+    c = st.columns(4)
+    c[0].metric("Next 30 days", sum(1 for d in every if 0 <= (d.date - day).days <= 30))
+    c[1].metric("Next 12 months", sum(1 for d in every if 0 <= (d.date - day).days <= 365))
+    c[2].metric("Goals without a date", undated)
+    c[3].metric("Deadlines moved", sum(d.moves for d in every))
+    past = [d for d in every if d.date < day]
+    if past:
+        st.error(f"{len(past)} commitment(s) past their deadline - close each out (achieved / missed) or move the "
+                 "deadline with a reason.")
+    soon = [d for d in every if day <= d.date][:4]
+    if soon:
+        st.markdown("**⏳ Coming up:** " + " · ".join(
+            f"{ICON.get(d.code.split('-')[0], '')} {_short(d.title, 30)} :gray[({d.countdown.label.split(' (')[0]})]"
+            for d in soon))
+    SS.setdefault("tl_view", "By pillar")
+    view = st.segmented_control("View", ["By pillar", "Roadmap", "Chart"], key="tl_view",
+                                label_visibility="collapsed") or "By pillar"
+    {"By pillar": timeline_by_pillar_view, "Roadmap": timeline_roadmap_view,
+     "Chart": timeline_chart_view}[view](groups)
 
 
 def goal_block(g: Goal) -> None:
