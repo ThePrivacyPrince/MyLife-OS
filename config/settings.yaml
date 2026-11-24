@@ -40,3 +40,6 @@ planner:
   agenda_days: 7
   ics_days_back: 30           # calendar import window
   ics_days_ahead: 240
+
+money:
+  cooloff_days: 14            # a full "want" fund unlocks "Bought it" after this many days

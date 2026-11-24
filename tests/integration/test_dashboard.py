@@ -5,7 +5,7 @@ from streamlit.testing.v1 import AppTest
 from lifeos.config import REPO_ROOT
 
 APP = str(REPO_ROOT / "lifeos" / "dashboard" / "app.py")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Add", "Recurring", "All tasks", "Review"]
 
 
 @pytest.fixture
@@ -242,3 +242,25 @@ def test_int19_set_a_deadline_from_the_timeline(seeded_db):
     [b for b in at.button if b.label == "Set"][0].click().run()
     assert not at.exception
     assert any("Deadline set" in x.value for x in at.success), [e.value for e in at.error]
+
+
+
+def test_int20_money_add_fund_set_aside_and_before_you_buy(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Money").run()
+    assert not at.exception
+    at.text_input(key="afnholiday").set_value("Christmas 2026")
+    at.text_input(key="aftholiday").set_value("300")
+    [b for b in at.button if b.label == "Add"][1].click().run()
+    assert any("Added" in x.value for x in at.success), [e.value for e in at.error]
+    amt = next(w.key for w in at.text_input if w.key and w.key.startswith("amtfd"))
+    at.text_input(key=amt).set_value("40")
+    [b for b in at.button if b.label == "Set aside"][0].click().run()
+    assert any("Set aside" in x.value for x in at.success), [e.value for e in at.error]
+    assert any("$40 of $300 saved" in str(p.proto.text) for p in at.get("progress"))
+    at.text_input(key="byb_i").set_value("Sneakers")
+    at.text_input(key="byb_p").set_value("180")
+    [b for b in at.button if b.label == "Check it"][0].click().run()
+    [b for b in at.button if b.label == "Skip it - keep the money"][0].click().run()
+    assert any("Kept $180" in x.value for x in at.success)

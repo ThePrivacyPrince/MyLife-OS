@@ -389,3 +389,63 @@ class DailyCheck(Base):
 
     progress_outcome: Mapped["WeeklyOutcome | None"] = relationship(foreign_keys=[progress_outcome_id])
     progress_task: Mapped["Task | None"] = relationship(foreign_keys=[progress_task_id])
+
+
+class Fund(Base):
+    """A money bucket: something you're saving for, a debt you're paying down, or spending you're tracking.
+
+    Money is tracked, not moved: entries record what you actually set aside, paid or spent elsewhere."""
+
+    __tablename__ = "funds"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(8))          # save | debt | spend
+    space: Mapped[str] = mapped_column(String(16))        # family | holiday | wants | reserves | owed
+    target: Mapped[Decimal | None] = mapped_column(DecimalText)  # save: goal · debt: amount owed · spend: monthly budget
+    deadline: Mapped[dt.date | None] = mapped_column(Date)
+    counterparty: Mapped[str] = mapped_column(String(120), default="")  # who you owe
+    kept_where: Mapped[str] = mapped_column(String(120), default="")    # e.g. "Savings account", "envelope"
+    notes: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(12), default="active")   # active | done | dropped
+    paid_price: Mapped[Decimal | None] = mapped_column(DecimalText)     # what a want actually cost
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    closed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+
+    entries: Mapped[list["FundEntry"]] = relationship(back_populates="fund", order_by="FundEntry.id")
+
+
+class FundEntry(Base):
+    """Append-only money log for a fund."""
+
+    __tablename__ = "fund_entries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fund_id: Mapped[int] = mapped_column(ForeignKey("funds.id"))
+    day: Mapped[dt.date] = mapped_column(Date)
+    kind: Mapped[str] = mapped_column(String(12))  # add | withdraw | payment | charge | spend | purchase
+    amount: Mapped[Decimal] = mapped_column(DecimalText)  # always positive; kind says which way it moves
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    fund: Mapped[Fund] = relationship(back_populates="entries")
+
+
+class ImpulseCheck(Base):
+    """'Before you buy': an item you thought about, its price, and what you decided."""
+
+    __tablename__ = "impulse_checks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day: Mapped[dt.date] = mapped_column(Date)
+    item: Mapped[str] = mapped_column(String(160))
+    price: Mapped[Decimal] = mapped_column(DecimalText)
+    decision: Mapped[str] = mapped_column(String(12))  # skip | wishlist | buy
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class UserSetting(Base):
+    """Small personal settings kept only in your local database (never in Git), e.g. take-home hourly rate."""
+
+    __tablename__ = "user_settings"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

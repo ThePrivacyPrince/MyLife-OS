@@ -52,6 +52,10 @@ class PlannerSettings(BaseModel):
     ics_days_ahead: int = 240
 
 
+class MoneySettings(BaseModel):
+    cooloff_days: int = Field(14, ge=0, le=365)
+
+
 class Settings(BaseModel):
     timezone: str = "America/New_York"
     database_path: str = "data/lifeos.db"
@@ -59,6 +63,7 @@ class Settings(BaseModel):
     controls: ControlSettings = ControlSettings()
     cascade: CascadeSettings = CascadeSettings()
     planner: PlannerSettings = PlannerSettings()
+    money: MoneySettings = MoneySettings()
 
     @property
     def tz(self) -> ZoneInfo:

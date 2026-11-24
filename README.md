@@ -27,6 +27,9 @@ Business · Relationships · Environment · Finances · Education.
 - **Weekly outcomes and the evening check:** up to 3 finish lines a week, closed with evidence. Three evening
   questions (progress, one ask, capacity) plan tomorrow, and capacity follows your real calendar, overnights
   included ([plan](docs/plan-reviews-decisions.md)).
+- **Money:** separate tabs for family, holidays, wants, reserves and money owed. Fill-up bars, a 14-day cool-off
+  on wants, "Before you buy" (price in hours of work), and a paycheck splitter that funds obligations first
+  ([details](docs/money.md)).
 - **Tasks by pillar:** All tasks opens grouped by pillar, then overdue / this week / later / no date / waiting,
   with a side-by-side Board view.
 - **Edit anything:** one ✏️ form per task or routine. The audit rules still apply, and a reason is asked for

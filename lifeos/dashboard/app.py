@@ -25,6 +25,7 @@ from lifeos.services import planner_cal as P
 from lifeos.services import task_edit as E
 from lifeos.services import daily_check as D
 from lifeos.services import outcomes as O
+from lifeos.services import money as M
 from lifeos.services import weekly as W
 from lifeos.services import recurring as R
 from lifeos.services import tasks as T
@@ -80,7 +81,7 @@ def val(key: str, default=None):
 
 # ------------------------------------------------------------------ sidebar
 st.sidebar.title("◎ LIFE OS")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Add", "Recurring", "All tasks", "Review"]
 page = st.sidebar.radio("View", PAGES, label_visibility="collapsed", key="nav")
 day: dt.date = st.sidebar.date_input("Planning date", value=get_settings().today())
 pillar_filter = st.sidebar.multiselect("Pillars", list(ICON), format_func=lambda c: f"{ICON[c]} {c}")
@@ -510,6 +511,253 @@ def daily_check_form() -> None:
         st.caption("Saved already - saving again updates it.")
 
 
+# ================================================================== Money
+PACE_TEXT = {"on_track": "🟢 on track", "behind": "🟠 behind pace", "done": "✅ done", "no_deadline": "",
+             "over_budget": "🟠 over budget", "under_budget": "🟢 within budget", "no_budget": ""}
+
+
+def fund_card(f) -> None:
+    p = M.progress(f, day)
+    k = f"fd{f.id}"
+    with st.container(border=True):
+        head = f"**{f.name}**"
+        if f.kind == "debt" and f.counterparty:
+            head += f" :gray[· to {f.counterparty}]"
+        st.markdown(head)
+        if f.kind == "save":
+            text = f"{M.fmt(p.done)} of {M.fmt(p.goal)} saved · {p.fraction:.0%}"
+        elif f.kind == "debt":
+            text = f"Paid {M.fmt(p.done)} of {M.fmt(p.goal)} · {M.fmt(M.remaining(f))} left"
+        else:
+            text = (f"This month: {M.fmt(p.done)} of {M.fmt(p.goal)} budget" if p.goal
+                    else f"This month: {M.fmt(p.done)} spent")
+        st.progress(p.fraction, text=text)
+        bits = []
+        if f.deadline:
+            bits.append(f"by {f.deadline:%b} {f.deadline.day}, {f.deadline.year}")
+        if p.weekly_needed and p.pace != "done":
+            bits.append(f"{M.fmt(p.weekly_needed)}/week gets you there")
+        if p.pace == "done":
+            bits.append("✅ paid off" if f.kind == "debt" else "✅ fully saved")
+        elif PACE_TEXT.get(p.pace):
+            bits.append(PACE_TEXT[p.pace])
+        if p.eta and p.pace != "done":
+            bits.append(f"at your recent pace: ~{p.eta:%b} {p.eta.day}")
+        if f.kept_where:
+            bits.append(f"kept in: {f.kept_where}")
+        if bits:
+            st.caption(" · ".join(bits))
+        unlock = M.cooloff_ends(f)
+        if f.space == "wants":
+            if unlock is None:
+                st.caption(f"🧊 Once it's fully saved, a {get_settings().money.cooloff_days}-day cool-off starts. "
+                           "Still want it after? Then buy it.")
+            elif day < unlock:
+                st.caption(f"🧊 Fully saved. Cool-off ends {unlock:%a %b} {unlock.day} - "
+                           f"{(unlock - day).days} day(s) to be sure.")
+            else:
+                st.caption("🔓 Cool-off done. Still want it? **More → Bought it**, or drop it and keep the money.")
+        if f.kind == "spend" and f.entries:
+            recent = sorted(f.entries, key=lambda e: (e.day, e.id))[-3:]
+            st.caption("Recent: " + " · ".join(f"{e.day:%b} {e.day.day} {M.fmt(e.amount)} {e.note}".strip() for e in recent))
+        r = st.columns([1.1, 2.2, 1, 1, 0.9])
+        r[0].text_input("Amount", key=f"amt{k}", label_visibility="collapsed", placeholder="$")
+        r[1].text_input("Note", key=f"note{k}", label_visibility="collapsed",
+                        placeholder={"spend": "what it was for", "debt": "e.g. Zelle, Nov 30"}.get(f.kind, "note (optional)"))
+        actions = {"save": [("add", "Set aside"), ("withdraw", "Take out")],
+                   "debt": [("payment", "Paid"), ("charge", "New charge")],
+                   "spend": [("spend", "Log spending")]}[f.kind]
+        for col, (kind, label) in zip(r[2:4], actions):
+            col.button(label, key=f"{kind}{k}", use_container_width=True, type="primary" if kind in ("add", "payment", "spend") else "secondary",
+                       on_click=act, args=(lambda s, i=f.id, kk=kind: M.add_entry(
+                           s, i, kk, val(f"amt{k}", ""), note=val(f"note{k}", ""), today=day), f"{label} ✓"))
+        with r[4].popover("More", use_container_width=True):
+            fund_more(f, k)
+
+
+def fund_more(f, k: str) -> None:
+    hist = sorted(f.entries, key=lambda e: (e.day, e.id), reverse=True)[:12]
+    if hist:
+        st.markdown("**History**")
+        st.dataframe([{"day": e.day, "what": e.kind, "amount": M.fmt(e.amount), "note": e.note} for e in hist],
+                     hide_index=True, use_container_width=True)
+    with st.form(f"fe{k}"):
+        st.markdown("**Edit**")
+        st.text_input("Name", value=f.name, key=f"fn{k}")
+        c = st.columns(2)
+        c[0].text_input("Monthly budget" if f.kind == "spend" else ("Amount owed" if f.kind == "debt" else "Target"),
+                        value=str(f.target or ""), key=f"ft{k}")
+        c[1].date_input("Deadline", value=f.deadline or day + dt.timedelta(days=60), key=f"fdl{k}")
+        c[1].checkbox("No deadline", value=f.deadline is None, key=f"fdn{k}")
+        st.text_input("Kept where", value=f.kept_where, key=f"fk{k}")
+        if f.kind == "debt":
+            st.text_input("Owed to", value=f.counterparty, key=f"fc{k}")
+        st.text_input("Reason (needed to move a deadline)", key=f"fr{k}")
+        st.form_submit_button("Save", on_click=act, args=(lambda s, i=f.id: M.update_fund(
+            s, i, name=val(f"fn{k}"), target=val(f"ft{k}", ""),
+            deadline=None if val(f"fdn{k}") else val(f"fdl{k}"), kept_where=val(f"fk{k}", ""),
+            counterparty=val(f"fc{k}") if f.kind == "debt" else None, reason=val(f"fr{k}", "")), "Updated"))
+    if f.kind == "save":
+        st.markdown("**Bought it**")
+        st.text_input("What it actually cost", key=f"bp{k}", placeholder="$")
+        unlock = M.cooloff_ends(f)
+        early = f.space == "wants" and (unlock is None or day < unlock)
+        if early:
+            st.text_input("Buying before the cool-off ends? Why", key=f"bo{k}")
+        st.button("Bought it ✓", key=f"bb{k}", on_click=act, args=(lambda s, i=f.id: M.mark_bought(
+            s, i, val(f"bp{k}", ""), today=day, override_reason=val(f"bo{k}", "") if early else ""), "Recorded 🎉"))
+    if f.kind != "debt":
+        st.markdown("**Drop it**" + (" - what you'd saved counts as kept" if f.space == "wants" else ""))
+        st.text_input("Why", key=f"dr{k}")
+        st.button("Drop", key=f"dd{k}", on_click=act, args=(lambda s, i=f.id: M.drop_fund(
+            s, i, val(f"dr{k}", ""), today=day), "Dropped"))
+
+
+def add_fund_form(space: str) -> None:
+    kinds = ["debt"] if space == "owed" else ["save", "spend"]
+    label = {"save": "Saving up for something", "spend": "Tracking spending", "debt": "Money I owe"}
+    with st.expander(f"➕ Add to {M.SPACES[space].split(' ', 1)[1]}"):
+        with st.form(f"af{space}", clear_on_submit=True):
+            if len(kinds) > 1:
+                st.radio("Type", kinds, index=kinds.index(M.DEFAULT_KIND[space]), key=f"afk{space}", horizontal=True,
+                         format_func=label.get)
+            st.text_input("Name", key=f"afn{space}", placeholder={
+                "family": "e.g. My son - clothes & school", "holiday": "e.g. Christmas 2026",
+                "wants": "e.g. Meta glasses", "reserves": "e.g. Jet Life opening cushion",
+                "owed": "e.g. Parents"}[space])
+            c = st.columns(3)
+            c[0].text_input("Target / amount owed / monthly budget", key=f"aft{space}", placeholder="$")
+            c[1].date_input("Deadline", value=day + dt.timedelta(days=30), key=f"afd{space}")
+            c[1].checkbox("No deadline", value=space in ("family", "wants"), key=f"afdn{space}")
+            if space == "owed":
+                c[2].text_input("Owed to", key=f"afc{space}")
+            else:
+                c[2].text_input("Kept where", key=f"afw{space}", placeholder="e.g. savings account")
+            st.form_submit_button("Add", type="primary", on_click=act, args=(lambda s: M.create_fund(
+                s, name=val(f"afn{space}", ""), space=space,
+                kind=val(f"afk{space}") if len(kinds) > 1 else "debt", target=val(f"aft{space}", ""),
+                deadline=None if val(f"afdn{space}") else val(f"afd{space}"),
+                counterparty=val(f"afc{space}", "") if space == "owed" else "",
+                kept_where=val(f"afw{space}", "") if space != "owed" else "", today=day), "Added"))
+
+
+def before_you_buy() -> None:
+    st.caption("Thinking of buying something? Check it first.")
+    with st.form("byb", clear_on_submit=False):
+        c = st.columns([2, 1])
+        c[0].text_input("What", key="byb_i", placeholder="e.g. Meta glasses")
+        c[1].text_input("Price", key="byb_p", placeholder="$")
+        st.form_submit_button("Check it")
+    item, price = val("byb_i", ""), val("byb_p", "")
+    if item and price:
+        try:
+            amt = M.money(price)
+        except Exception:
+            st.error("Price isn't a number.")
+            return
+        hrs = M.hours_of_work(s, amt)
+        if hrs is not None:
+            st.markdown(f"**{M.fmt(amt)} = about {hrs} hours of work** at your take-home rate.")
+        else:
+            st.caption("Set your take-home hourly rate under ⚙️ Settings to see this in hours of work.")
+        behind = M.behind_protected(s, day)
+        if behind:
+            st.warning("Behind pace first: " + ", ".join(f.name for f in behind))
+        c = st.columns(3)
+        c[0].button("Skip it - keep the money", key="byb_s", type="primary", on_click=act, args=(lambda s: M.impulse_check(
+            s, item=item, price=amt, decision="skip", today=day), f"Kept {M.fmt(amt)} 💪"))
+        c[1].button(f"Wish list ({get_settings().money.cooloff_days}-day cool-off)", key="byb_w", on_click=act,
+                    args=(lambda s: M.impulse_check(s, item=item, price=amt, decision="wishlist", today=day),
+                          "Added to Wants - save for it, then cool off"))
+        c[2].button("Buying it", key="byb_b", on_click=act, args=(lambda s: M.impulse_check(
+            s, item=item, price=amt, decision="buy", today=day), "Logged"))
+
+
+def got_paid() -> None:
+    st.caption("Split money as it comes in: what you owe first, then reserves, family, holidays, and wants last.")
+    st.text_input("Amount that came in", key="gp_amt", placeholder="$")
+    raw = val("gp_amt", "")
+    if not raw:
+        return
+    try:
+        splits, left = M.suggest_split(s, raw, day)
+    except Exception as exc:
+        st.error(str(exc))
+        return
+    if not splits:
+        st.caption("Add a fund with a target first.")
+        return
+    with st.form("gp_form"):
+        for x in splits:
+            c = st.columns([3, 1.2])
+            c[0].markdown(f"{M.SPACES[x.fund.space].split(' ')[0]} **{x.fund.name}**  \n:gray[{x.why}]")
+            c[1].text_input("Amount", value=str(x.suggested) if x.suggested else "", key=f"gp{x.fund.id}",
+                            label_visibility="collapsed")
+        st.caption(f"Unassigned after suggestions: {M.fmt(left)} - leave it as a buffer or assign it above.")
+        st.form_submit_button("Record this split", type="primary", on_click=act, args=(lambda s: M.apply_split(
+            s, {x.fund.id: val(f"gp{x.fund.id}", "") for x in splits}, day), "Split recorded 💵"))
+
+
+def money_settings() -> None:
+    rate = M.hourly_rate(s)
+    c = st.columns(2)
+    c[0].text_input("Take-home pay per hour", value=str(rate or ""), key="ms_rate", placeholder="$ after taxes",
+                    help="Stored only in your local database. Used to show prices as hours of work.")
+    c[0].button("Save rate", key="ms_rate_b", on_click=act, args=(lambda s: M.set_hourly_rate(s, val("ms_rate", "")),
+                                                                  "Saved"))
+    c[1].text_input("Cash you actually have right now", key="ms_cash", placeholder="$",
+                    help="Optional. Lets LIFE OS warn you if your funds add up to more than you really have.")
+    c[1].button("Save cash", key="ms_cash_b", on_click=act, args=(lambda s: M.set_cash_on_hand(
+        s, val("ms_cash", ""), day), "Saved"))
+
+
+def page_money() -> None:
+    st.title("💰 Money")
+    st.caption("Track what you set aside, pay down and spend. LIFE OS tracks money - it never moves it, so record "
+               "what you actually did. Each area has its own tab, so nothing gets mixed together.")
+    from sqlalchemy import select as _sel
+    from lifeos.models import Fund
+    active = list(s.scalars(_sel(Fund).where(Fund.status == "active")))
+    aside = sum((M.balance(f) for f in active if f.kind == "save"), M.ZERO)
+    owed = sum((M.remaining(f) for f in active if f.kind == "debt"), M.ZERO)
+    lo, hi = M.month_bounds(day)
+    c = st.columns(3)
+    c[0].metric("Set aside", M.fmt(aside))
+    c[1].metric("Still owed", M.fmt(owed))
+    c[2].metric("Kept by not buying", M.fmt(M.kept_total(s)), help=f"This month: {M.fmt(M.kept_total(s, lo, hi))}")
+    cash, cash_day, set_aside = M.cash_check(s)
+    if cash is not None and set_aside > cash:
+        st.warning(f"Your funds say {M.fmt(set_aside)} is set aside, but you reported {M.fmt(cash)} on "
+                   f"{cash_day:%b} {cash_day.day}. Some of that money may be counted twice or already spent.")
+    t1, t2, t3 = st.columns(3)
+    with t1.expander("🧠 Before you buy"):
+        before_you_buy()
+    with t2.expander("💵 Got paid? Split it"):
+        got_paid()
+    with t3.expander("⚙️ Settings"):
+        money_settings()
+    tabs = st.tabs(list(M.SPACES.values()))
+    for tab, space in zip(tabs, M.SPACES):
+        with tab:
+            funds = M.funds_in(s, space)
+            if space == "wants":
+                behind = M.behind_protected(s, day)
+                if behind:
+                    st.info("⏸️ Before wants: " + ", ".join(f"**{f.name}**" for f in behind) +
+                            " " + ("is" if len(behind) == 1 else "are") + " behind pace. Fill those first?")
+            if not funds:
+                st.caption("Nothing here yet.")
+            for f in funds:
+                fund_card(f)
+            add_fund_form(space)
+            closed = [f for f in M.funds_in(s, space, include_closed=True) if f.status != "active"]
+            if closed:
+                with st.expander(f"Done & dropped ({len(closed)})"):
+                    for f in closed:
+                        extra = f" · paid {M.fmt(f.paid_price)}" if f.paid_price is not None else ""
+                        st.markdown(f"{'✅' if f.status == 'done' else '—'} {f.name}{extra}")
+
+
 # ================================================================== Planner
 PL_VIEWS = ["Agenda", "Week", "Month", "Weekly review"]
 
@@ -704,6 +952,10 @@ def planner_weekly_review() -> None:
                 help=f"planned {ck.get('asks_planned', 0)} · no {ck.get('asks_no', 0)} · didn't ask {ck.get('asks_skipped', 0)}")
     if ck.get("gains"):
         st.caption("💲 What your asks got you: " + " · ".join(ck["gains"]))
+    wm = M.week_money(s, start, end)
+    if any(v for v in wm.values()):
+        st.caption(f"💰 This week: set aside {M.fmt(wm['set_aside'])} · paid down {M.fmt(wm['paid_down'])} · "
+                   f"tracked spending {M.fmt(wm['spent_tracked'])} · kept by not buying {M.fmt(wm['kept'])}")
     if w.rescheduled or w.overrides:
         st.caption(f"Rescheduled {w.rescheduled}× · priority overrides {w.overrides}×")
     open_outs = [o for o in O.outcomes_for_week(s, start) if o.status in O.OPEN]
@@ -1666,6 +1918,6 @@ def page_review() -> None:
         lambda s: save_review(s, day, val("rv_note", "")), "Review saved"))
 
 
-{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
+{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
  "Review": page_review}[page]()
 s.close()
