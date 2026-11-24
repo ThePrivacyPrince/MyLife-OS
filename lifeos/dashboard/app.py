@@ -1097,8 +1097,88 @@ def page_recurring() -> None:
                     lambda s, i=tpl.id: R.add_exception(s, i, val(f"sk{i}")), "Date skipped"))
 
 
+def _task_row(tk: Task, k: str, compact: bool = False) -> None:
+    """One actionable line: ○ done · title · meta · ✏️ edit. Compact (board) puts the buttons under the title."""
+    bits = [f"P{tk.priority}"]
+    if tk.due_date:
+        bits.append(f"due {tk.due_date:%b} {tk.due_date.day}")
+    elif tk.scheduled_date:
+        bits.append(f"on {tk.scheduled_date:%a %b} {tk.scheduled_date.day}")
+    if tk.status in (S.WAITING, S.BLOCKED):
+        bits.append(f"{tk.status}: {tk.status_reason or ''}".strip())
+    if tk.status == S.IN_PROGRESS:
+        bits.append("in progress")
+    flag = "🔴 " if tk.priority == 1 else ""
+    text = f"{flag}{tk.title}{' ↻' if tk.is_recurring else ''}  \n:gray[{' · '.join(bits)}]"
+    done = dict(key=f"rd{k}{tk.id}", help="Mark done", on_click=act,
+                args=(lambda s, i=tk.id: T.transition(s, i, S.COMPLETED, today=day), "Completed ✓"))
+    if compact:
+        st.markdown(text)
+        b = st.columns(2)
+        b[0].button("✓", use_container_width=True, **done)
+        with b[1].popover("✏️", help="Edit", use_container_width=True):
+            edit_form(tk, f"{k}{tk.id}")
+        return
+    cols = st.columns([0.05, 0.83, 0.12])
+    cols[0].button("○", **done)
+    cols[1].markdown(text)
+    with cols[2].popover("✏️", help="Edit"):
+        edit_form(tk, f"{k}{tk.id}")
+
+
+def _pillar_header(g) -> str:
+    name = s.get(Pillar, g.code).name if s.get(Pillar, g.code) else g.code
+    parts = [f"{g.open_count} open"]
+    if g.p1_count:
+        parts.append(f"{g.p1_count} P1")
+    if g.overdue_count:
+        parts.append(f"{g.overdue_count} overdue")
+    return f"{ICON.get(g.code, '')} {name} · " + " · ".join(parts)
+
+
 def page_all() -> None:
     st.title("All tasks")
+    SS.setdefault("all_view", "By pillar")
+    view = st.segmented_control("View", ["By pillar", "Board", "Table"], key="all_view",
+                                label_visibility="collapsed") or "By pillar"
+    if view == "Table":
+        return all_tasks_table()
+    from lifeos.services.views import BUCKET_LABELS, BUCKETS, group_by_pillar
+    tasks = [x for x in s.scalars(select(Task)) if visible(x)]
+    codes = [c for c in _pillar_options() if not pillar_filter or c in pillar_filter]
+    groups = group_by_pillar(tasks, codes, day)
+    total = sum(g.open_count for g in groups)
+    st.caption(f"{total} open tasks across {sum(1 for g in groups if g.open_count)} pillars · protected commitments "
+               "(sleep, shifts) aren't listed · use the sidebar to show only routines or one-time tasks")
+    if view == "By pillar":
+        for g in groups:
+            with st.expander(_pillar_header(g), expanded=g.urgent):
+                if not g.open_count:
+                    st.caption("Nothing open here.")
+                for b in BUCKETS:
+                    items = g.buckets[b]
+                    if not items:
+                        continue
+                    st.markdown(f"**{BUCKET_LABELS[b]}** :gray[({len(items)})]")
+                    for tk in items:
+                        _task_row(tk, f"pg{b}")
+        return
+    cols = st.columns(len(groups) or 1)
+    for col, g in zip(cols, groups):
+        with col:
+            st.markdown(f"**{ICON.get(g.code, '')} {s.get(Pillar, g.code).name}**")
+            st.caption(" · ".join(x for x in [f"{g.open_count} open", f"{g.p1_count} P1" if g.p1_count else "",
+                                              f"{g.overdue_count} overdue" if g.overdue_count else ""] if x))
+            for b in BUCKETS:
+                items = g.buckets[b]
+                if not items:
+                    continue
+                with st.expander(f"{BUCKET_LABELS[b]} ({len(items)})", expanded=b in ("overdue", "this_week")):
+                    for tk in items:
+                        _task_row(tk, f"bd{b}", compact=True)
+
+
+def all_tasks_table() -> None:
     c = st.columns(2)
     statuses = c[0].multiselect("Status", [str(x) for x in S], default=[str(x) for x in OPEN_STATES])
     prios = c[1].multiselect("Priority", [1, 2, 3], default=[1, 2, 3], format_func=lambda p: f"P{p}")

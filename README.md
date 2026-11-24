@@ -27,6 +27,8 @@ Business · Relationships · Environment · Finances · Education.
 - **Weekly outcomes and the evening check:** up to 3 finish lines a week, closed with evidence. Three evening
   questions (progress, one ask, capacity) plan tomorrow, and capacity follows your real calendar, overnights
   included ([plan](docs/plan-reviews-decisions.md)).
+- **Tasks by pillar:** All tasks opens grouped by pillar, then overdue / this week / later / no date / waiting,
+  with a side-by-side Board view.
 - **Edit anything:** one ✏️ form per task or routine. The audit rules still apply, and a reason is asked for
   only where it matters.
 - **Plan files:** load a whole vision-to-tasks plan from YAML in one step ([format](docs/plan-files.md)).

@@ -207,3 +207,19 @@ def test_int16_planner_outcome_manager_and_review_closeout(seeded_db):
     close = [b for b in at.button if b.label == "Close"]
     close[0].click().run()
     assert any("needs evidence" in e.value for e in at.error), "achieved without evidence is refused"
+
+
+@pytest.mark.parametrize("view", ["By pillar", "Board", "Table"])
+def test_int17_all_tasks_views(seeded_db, view):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("All tasks").run()
+    at.session_state["all_view"] = view
+    at.run()
+    assert not at.exception, at.exception
+    if view != "Table":
+        labels = [e.label for e in at.expander]
+        assert any(l.startswith("💼 Business") for l in labels) or view == "Board"
+        done = [b for b in at.button if b.label in ("○", "✓")]
+        done[0].click().run()
+        assert not at.exception

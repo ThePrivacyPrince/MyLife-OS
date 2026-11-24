@@ -55,3 +55,21 @@ Settings: `config/settings.yaml → planner` (review day, agenda length, import 
 - **One edit, one transaction:** if any part is refused, nothing is saved. Every change lands in the task's history.
 - **Routines:** **Recurring → ✏️ Edit routine** changes the name, pillar, priority, schedule, estimate, missed-day rule, end date or protection. Changes apply to today's open occurrence and all future ones; past days stay as they happened.
 - **No hard delete:** a mistaken task is *cancelled* with a reason, so the record stays honest.
+
+## All tasks: organized by pillar
+**All tasks** opens in **By pillar**: five drop-down sections (Business, Relationships, Environment, Finances,
+Education). Each header shows open / P1 / overdue counts, e.g. "💼 Business · 3 open · 1 P1 · 1 overdue".
+Sections with overdue work, or a P1 due this week, open automatically.
+
+Inside each pillar, tasks are grouped by when they need to happen:
+
+🔴 Overdue → 📅 This week → 🗓️ Later → 📥 No date → ⏳ Waiting / blocked.
+
+Within a group they're sorted P1 first, then by due date.
+
+Every row has ○ to mark it done and the ✏️ edit pop-up. The priority gate still applies.
+
+- **Board:** the five pillars side by side as columns, each group a drop-down.
+- **Table:** the original sortable list.
+- **Not listed:** protected commitments (sleep, shifts).
+- **Sidebar filters** still work: pillar, and one-time vs recurring.
