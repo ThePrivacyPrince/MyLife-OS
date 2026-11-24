@@ -26,6 +26,8 @@ from lifeos.services import task_edit as E
 from lifeos.services import daily_check as D
 from lifeos.services import outcomes as O
 from lifeos.services import money as M
+from lifeos.services import acquisitions as Q
+from lifeos.engines import acquisition as AQ
 from lifeos.services import weekly as W
 from lifeos.services import recurring as R
 from lifeos.services import tasks as T
@@ -81,7 +83,7 @@ def val(key: str, default=None):
 
 # ------------------------------------------------------------------ sidebar
 st.sidebar.title("◎ LIFE OS")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "Add", "Recurring", "All tasks", "Review"]
 page = st.sidebar.radio("View", PAGES, label_visibility="collapsed", key="nav")
 day: dt.date = st.sidebar.date_input("Planning date", value=get_settings().today())
 pillar_filter = st.sidebar.multiselect("Pillars", list(ICON), format_func=lambda c: f"{ICON[c]} {c}")
@@ -624,11 +626,11 @@ def add_fund_form(space: str) -> None:
             st.text_input("Name", key=f"afn{space}", placeholder={
                 "family": "e.g. My son - clothes & school", "holiday": "e.g. Christmas 2026",
                 "wants": "e.g. Meta glasses", "reserves": "e.g. Jet Life opening cushion",
-                "owed": "e.g. Parents"}[space])
+                "business": "e.g. Ski purchase fund", "owed": "e.g. Parents"}[space])
             c = st.columns(3)
             c[0].text_input("Target / amount owed / monthly budget", key=f"aft{space}", placeholder="$")
             c[1].date_input("Deadline", value=day + dt.timedelta(days=30), key=f"afd{space}")
-            c[1].checkbox("No deadline", value=space in ("family", "wants"), key=f"afdn{space}")
+            c[1].checkbox("No deadline", value=space in ("family", "wants", "business"), key=f"afdn{space}")
             if space == "owed":
                 c[2].text_input("Owed to", key=f"afc{space}")
             else:
@@ -756,6 +758,212 @@ def page_money() -> None:
                     for f in closed:
                         extra = f" · paid {M.fmt(f.paid_price)}" if f.paid_price is not None else ""
                         st.markdown(f"{'✅' if f.status == 'done' else '—'} {f.name}{extra}")
+
+
+# ================================================================== Deals (acquisitions)
+FLAG_ICON = {"risk": "🔴", "caution": "🟠", "leverage": "💲"}
+COND = list(AQ.CONDITIONS)
+
+
+def _dollars(d) -> str:
+    return "unknown" if d is None else f"${d:,.0f}"
+
+
+def candidate_summary(ev, rank: int | None = None) -> None:
+    c = ev.candidate
+    head = f"**{'#' + str(rank) + ' · ' if rank else ''}{c.title}**"
+    st.markdown(head + (f" :gray[· {c.source}]" if c.source else "") + (f" · [listing]({c.url})" if c.url else ""))
+    facts = [f"asking {_dollars(c.asking_price)}"]
+    if c.offer:
+        facts.append(f"offer {_dollars(c.offer)}")
+    facts += [f"{c.engine_hours} hrs" if c.engine_hours is not None else "hours unknown",
+              f"title {c.title_status}", f"trailer {c.trailer_included}", c.location or "location unknown"]
+    st.caption(" · ".join(facts))
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Ready to rent", ev.cost.label)
+    c2.metric("Gates passed", f"{ev.gates_passed}/7")
+    c3.metric("Facts known", f"{ev.facts_known}/{ev.facts_total}")
+    for f in ev.flags:
+        st.caption(f"{FLAG_ICON[f.level]} {f.text}")
+    st.info(f"**Next step:** {ev.next_step}", icon="👉")
+
+
+def candidate_detail(ev) -> None:
+    c = ev.candidate
+    k = f"cd{c.id}"
+    t1, t2, t3, t4 = st.tabs(["Facts & costs", "Inspection", "Gates & decision", "History"])
+    with t1, st.form(f"cf{k}"):
+        r = st.columns(3)
+        r[0].text_input("Listing name", value=c.title, key=f"c_t{k}")
+        r[1].text_input("Source", value=c.source, key=f"c_src{k}")
+        r[2].text_input("Link", value=c.url, key=f"c_url{k}")
+        r = st.columns(4)
+        r[0].text_input("Make", value=c.manufacturer, key=f"c_mk{k}")
+        r[1].text_input("Model", value=c.model, key=f"c_md{k}")
+        r[2].number_input("Year (0 = unknown)", 0, 2100, value=c.year or 0, key=f"c_y{k}")
+        r[3].number_input("Engine hours (0 = unknown)", 0, 5000, value=c.engine_hours or 0, key=f"c_h{k}")
+        r = st.columns(4)
+        r[0].text_input("Asking price", value=str(c.asking_price or ""), key=f"c_p{k}")
+        r[1].text_input("Your offer", value=str(c.offer or ""), key=f"c_o{k}")
+        r[2].text_input("Agreed price", value=str(c.agreed_price or ""), key=f"c_ag{k}")
+        r[3].text_input("Location", value=c.location, key=f"c_l{k}")
+        r = st.columns(5)
+        r[0].selectbox("Hull", COND, index=COND.index(c.hull_condition), key=f"c_hu{k}")
+        r[1].selectbox("Mechanical (as stated)", COND, index=COND.index(c.mechanical_condition), key=f"c_me{k}")
+        r[2].selectbox("Title", list(AQ.TITLE_STATUSES), index=AQ.TITLE_STATUSES.index(c.title_status), key=f"c_ti{k}")
+        r[3].selectbox("Trailer", list(AQ.YES_NO), index=AQ.YES_NO.index(c.trailer_included), key=f"c_tr{k}")
+        r[4].selectbox("Suits rentals", list(AQ.YES_NO), index=AQ.YES_NO.index(c.rental_suitable), key=f"c_rs{k}")
+        st.checkbox("Title verified in person (name matches seller's ID, HIN matches hull)", value=c.title_verified,
+                    key=f"c_tv{k}")
+        r = st.columns(3)
+        r[0].text_input("Estimated repairs", value=str(c.est_repairs if c.est_repairs is not None else ""), key=f"c_rp{k}",
+                        help="Leave blank if unknown - enter 0 if you know there are none.")
+        r[1].text_input("Transport", value=str(c.transport_cost if c.transport_cost is not None else ""), key=f"c_tc{k}")
+        r[2].text_input("Prep (registration, gear, rental-ready)", value=str(c.prep_cost if c.prep_cost is not None else ""),
+                        key=f"c_pc{k}")
+        st.text_area("What the seller said (word for word helps)", value=c.seller_statements, key=f"c_ss{k}", height=70)
+        st.text_input("Why it does / doesn't suit rentals", value=c.rental_note, key=f"c_rn{k}")
+        st.form_submit_button("Save facts", type="primary", on_click=act, args=(lambda s, i=c.id: Q.update_candidate(
+            s, i, today=day, title=val(f"c_t{k}"), source=val(f"c_src{k}", ""), url=val(f"c_url{k}", ""),
+            manufacturer=val(f"c_mk{k}", ""), model=val(f"c_md{k}", ""), year=val(f"c_y{k}") or None,
+            engine_hours=val(f"c_h{k}") or None, asking_price=val(f"c_p{k}", ""), offer=val(f"c_o{k}", ""),
+            agreed_price=val(f"c_ag{k}", ""), location=val(f"c_l{k}", ""), hull_condition=val(f"c_hu{k}"),
+            mechanical_condition=val(f"c_me{k}"), title_status=val(f"c_ti{k}"), trailer_included=val(f"c_tr{k}"),
+            rental_suitable=val(f"c_rs{k}"), title_verified=val(f"c_tv{k}"), est_repairs=val(f"c_rp{k}", ""),
+            transport_cost=val(f"c_tc{k}", ""), prep_cost=val(f"c_pc{k}", ""), seller_statements=val(f"c_ss{k}", ""),
+            rental_note=val(f"c_rn{k}", "")), "Facts saved"))
+    with t2:
+        st.caption(f"Inspection: **{AQ.inspection_state(c).replace('_', ' ')}**. Items marked ⭐ must pass. "
+                   "Bring someone who knows skis if you can.")
+        for key, text, crit in AQ.INSPECTION_ITEMS:
+            cur = (c.inspection or {}).get(key, {})
+            r = st.columns([4, 1.6, 2])
+            r[0].markdown(f"{'⭐ ' if crit else ''}{text}")
+            opts = ["", "pass", "fail"] + ([] if crit else ["na"])
+            r[1].selectbox("Result", opts, index=opts.index(cur.get("result", "")), key=f"in{k}{key}",
+                           label_visibility="collapsed", format_func=lambda o: {"": "—", "pass": "✅ pass",
+                                                                                "fail": "❌ fail", "na": "n/a"}[o])
+            r[2].text_input("Note", value=cur.get("note", ""), key=f"inn{k}{key}", label_visibility="collapsed",
+                            placeholder="readings / notes")
+        st.button("Save inspection", key=f"insv{k}", type="primary", on_click=act, args=(lambda s, i=c.id: [
+            Q.set_inspection(s, i, key, val(f"in{k}{key}", ""), val(f"inn{k}{key}", ""))
+            for key, _, _ in AQ.INSPECTION_ITEMS
+            if val(f"in{k}{key}", "") != (c.inspection or {}).get(key, {}).get("result", "")
+            or val(f"inn{k}{key}", "") != (c.inspection or {}).get(key, {}).get("note", "")], "Inspection saved"))
+    with t3:
+        for g in ev.gates:
+            st.markdown(f"{'✅' if g.passed else '⬜'} **{g.name}** :gray[· {g.detail}]")
+        funds = [f for f in M.funds_in(s, "business") + M.funds_in(s, "reserves") if f.kind == "save"]
+        opts = [None] + [f.id for f in funds]
+        r = st.columns([3, 1])
+        r[0].selectbox("Paid from fund", opts, index=opts.index(c.funding_fund_id) if c.funding_fund_id in opts else 0,
+                       key=f"cfund{k}", format_func=lambda i: "- choose -" if i is None else next(
+                           f"{M.SPACES[f.space].split(' ')[0]} {f.name} ({M.fmt(M.balance(f))})" for f in funds if f.id == i))
+        r[1].button("Set fund", key=f"cfb{k}", on_click=act, args=(lambda s, i=c.id: Q.set_funding(
+            s, i, val(f"cfund{k}")), "Fund set"))
+        if not M.funds_in(s, "business"):
+            st.caption("Tip: add a **Ski purchases** fund on **💰 Money → 💼 Business** so buying never touches reserves.")
+        if c.stage != "approved":
+            st.text_input("Override reason (only if approving with gates still open)", key=f"cov{k}")
+            st.button("Approve purchase", key=f"cap{k}", type="primary", on_click=act, args=(lambda s, i=c.id: Q.approve(
+                s, i, day, override_reason=val(f"cov{k}", "")), "Approved ✅"))
+        else:
+            r = st.columns([1.5, 3, 1.3])
+            r[0].text_input("Price paid", key=f"cbp{k}", placeholder="$")
+            r[1].text_input("Note", key=f"cbn{k}", placeholder="e.g. Cash, picked up Sat, trailer included")
+            r[2].button("Mark bought 🛥️", key=f"cbb{k}", type="primary", on_click=act, args=(lambda s, i=c.id: Q.mark_bought(
+                s, i, val(f"cbp{k}", ""), day, val(f"cbn{k}", "")), "Welcome to the fleet 🛥️"))
+        st.divider()
+        r = st.columns([1.5, 3, 1])
+        r[0].selectbox("Move to", ["contacted", "inspecting", "negotiating", "passed"], key=f"cst{k}")
+        r[1].text_input("Reason (required to pass)", key=f"csr{k}")
+        r[2].button("Update", key=f"csb{k}", on_click=act, args=(lambda s, i=c.id: Q.set_stage(
+            s, i, val(f"cst{k}"), val(f"csr{k}", "")), "Stage updated"))
+    with t4:
+        st.caption(f"First seen {c.first_seen:%b} {c.first_seen.day} · last verified "
+                   f"{c.last_verified:%b} {c.last_verified.day}" if c.last_verified else f"First seen {c.first_seen}")
+        if c.price_history:
+            st.dataframe([{"day": p.day, "price": f"${p.price:,.0f}", "note": p.note} for p in c.price_history],
+                         hide_index=True, use_container_width=True)
+
+
+def page_deals() -> None:
+    st.title("🛥️ Deals")
+    st.caption("Find, check and compare used equipment before you buy. Facts you don't know stay unknown, and a "
+               "seller saying 'it runs' is never treated as proof.")
+    cfg = Q.settings(s)
+    owned = Q.fleet(s)
+    evs = Q.ranked(s, day)
+    c = st.columns(4)
+    c[0].metric("Fleet", f"{len(owned)}/{cfg['fleet_target']}" if cfg["fleet_target"] else str(len(owned)))
+    c[1].metric("Candidates", len(evs))
+    c[2].metric("Ready to approve", sum(1 for e in evs if e.ready_for_approval and e.candidate.stage != "approved"))
+    c[3].metric("Price ceiling", _dollars(cfg["max_price"]) if cfg["max_price"] else "not set")
+    with st.expander("⚙️ Deal settings", expanded=cfg["max_price"] is None):
+        st.caption("Stored only in your local database.")
+        r = st.columns(3)
+        r[0].text_input("Max purchase price per unit", value=str(cfg["max_price"] or ""), key="dq_max", placeholder="$")
+        r[1].number_input("Fleet target", 0, 100, value=cfg["fleet_target"] or 0, key="dq_fleet")
+        r[2].number_input("'High hours' warning above", 0, 5000, value=cfg["high_hours"], key="dq_hours")
+        st.button("Save settings", key="dq_save", on_click=act, args=(lambda s: Q.save_settings(
+            s, max_price=val("dq_max", ""), fleet_target=val("dq_fleet") or None, high_hours=val("dq_hours")), "Saved"))
+    SS.setdefault("dq_view", "Best candidates")
+    view = st.segmented_control("View", ["Best candidates", "Compare", "Fleet", "Passed"], key="dq_view",
+                                label_visibility="collapsed") or "Best candidates"
+    if view == "Best candidates":
+        if not evs:
+            st.caption("No candidates yet - add a listing below.")
+        for i, ev in enumerate(evs, 1):
+            with st.container(border=True):
+                candidate_summary(ev, i)
+                with st.expander("Open"):
+                    candidate_detail(ev)
+    elif view == "Compare":
+        if evs:
+            st.dataframe([{
+                "rank": i, "listing": e.candidate.title, "stage": e.candidate.stage,
+                "price": _dollars(AQ.working_price(e.candidate)), "year": str(e.candidate.year or "?"),
+                "hours": str(e.candidate.engine_hours) if e.candidate.engine_hours is not None else "?",
+                "ready to rent": e.cost.label, "gates": f"{e.gates_passed}/7",
+                "risks": sum(f.level == "risk" for f in e.flags), "cautions": sum(f.level == "caution" for f in e.flags),
+                "facts known": f"{e.facts_known}/{e.facts_total}", "next step": e.next_step,
+            } for i, e in enumerate(evs, 1)], hide_index=True, use_container_width=True)
+            st.caption("Ranked by red-flag risks first (fewest wins), then gates passed, then lowest ready-to-rent cost.")
+        else:
+            st.caption("Nothing to compare yet.")
+    elif view == "Fleet":
+        for u in owned:
+            paid = f" · paid {_dollars(u.agreed_price)}" if u.agreed_price else ""
+            st.markdown(f"🛥️ **{u.title}**{paid}")
+        if not owned:
+            st.caption("No units recorded - add the skis you already own so the count is right.")
+        with st.form("own_add", clear_on_submit=True):
+            r = st.columns([3, 1])
+            r[0].text_input("Ski you already own", key="own_t", placeholder="e.g. 2017 Yamaha VX - unit 1")
+            r[1].form_submit_button("Add to fleet", on_click=act, args=(lambda s: Q.add_owned(
+                s, title=val("own_t", ""), today=day), "Added to fleet"))
+    else:
+        from lifeos.models import AcquisitionCandidate as _AC
+        passed = list(s.scalars(select(_AC).where(_AC.stage == "passed")))
+        for p_ in passed:
+            st.markdown(f"— {p_.title} :gray[· asking {_dollars(p_.asking_price)}]")
+        if not passed:
+            st.caption("Nothing passed on yet.")
+    with st.expander("➕ Add a listing"):
+        with st.form("cand_add", clear_on_submit=True):
+            r = st.columns([3, 1.2, 1.2])
+            r[0].text_input("Listing", key="na_t", placeholder="e.g. 2019 Yamaha VX Cruiser - Kingston")
+            r[1].text_input("Asking price", key="na_p", placeholder="$")
+            r[2].text_input("Source", key="na_s", placeholder="Marketplace")
+            r = st.columns([3, 1, 1])
+            r[0].text_input("Link", key="na_u")
+            r[1].text_input("Model", key="na_m", placeholder="VX Cruiser")
+            r[2].number_input("Year (0 = unknown)", 0, 2100, value=0, key="na_y")
+            st.text_area("What the seller said", key="na_ss", height=60)
+            st.form_submit_button("Add listing", type="primary", on_click=act, args=(lambda s: Q.add_candidate(
+                s, today=day, title=val("na_t", ""), asking_price=val("na_p", ""), source=val("na_s", ""),
+                url=val("na_u", ""), model=val("na_m", ""), year=val("na_y") or None,
+                seller_statements=val("na_ss", "")), "Listing added"))
 
 
 # ================================================================== Planner
@@ -1918,6 +2126,6 @@ def page_review() -> None:
         lambda s: save_review(s, day, val("rv_note", "")), "Review saved"))
 
 
-{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
+{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Deals": page_deals, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
  "Review": page_review}[page]()
 s.close()

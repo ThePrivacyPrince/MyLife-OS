@@ -5,7 +5,7 @@ from streamlit.testing.v1 import AppTest
 from lifeos.config import REPO_ROOT
 
 APP = str(REPO_ROOT / "lifeos" / "dashboard" / "app.py")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "Add", "Recurring", "All tasks", "Review"]
 
 
 @pytest.fixture
@@ -264,3 +264,18 @@ def test_int20_money_add_fund_set_aside_and_before_you_buy(seeded_db):
     [b for b in at.button if b.label == "Check it"][0].click().run()
     [b for b in at.button if b.label == "Skip it - keep the money"][0].click().run()
     assert any("Kept $180" in x.value for x in at.success)
+
+
+
+@pytest.mark.parametrize("view", ["Best candidates", "Compare", "Fleet", "Passed"])
+def test_int21_deals_views_and_add_listing(seeded_db, view):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Deals").run()
+    at.text_input(key="na_t").set_value("2019 Yamaha VX Cruiser - Kingston")
+    at.text_input(key="na_p").set_value("4800")
+    [b for b in at.button if b.label == "Add listing"][0].click().run()
+    assert any("Listing added" in x.value for x in at.success), [e.value for e in at.error]
+    at.session_state["dq_view"] = view
+    at.run()
+    assert not at.exception, at.exception

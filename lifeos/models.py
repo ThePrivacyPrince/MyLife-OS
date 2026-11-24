@@ -449,3 +449,56 @@ class UserSetting(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AcquisitionCandidate(Base):
+    """A used asset under consideration (e.g. a jet ski). Unknown facts stay None / 'unknown' - never guessed."""
+
+    __tablename__ = "acquisition_candidates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(160))
+    source: Mapped[str] = mapped_column(String(60), default="")
+    url: Mapped[str] = mapped_column(String(500), default="")
+    manufacturer: Mapped[str] = mapped_column(String(60), default="")
+    model: Mapped[str] = mapped_column(String(80), default="")
+    year: Mapped[int | None] = mapped_column(Integer)
+    asking_price: Mapped[Decimal | None] = mapped_column(DecimalText)
+    location: Mapped[str] = mapped_column(String(120), default="")
+    engine_hours: Mapped[int | None] = mapped_column(Integer)
+    hull_condition: Mapped[str] = mapped_column(String(12), default="unknown")        # unknown|good|fair|poor
+    mechanical_condition: Mapped[str] = mapped_column(String(12), default="unknown")  # as stated / observed
+    title_status: Mapped[str] = mapped_column(String(12), default="unknown")          # unknown|clean|lien|missing|salvage
+    title_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    trailer_included: Mapped[str] = mapped_column(String(8), default="unknown")       # unknown|yes|no
+    seller_statements: Mapped[str] = mapped_column(Text, default="")
+    est_repairs: Mapped[Decimal | None] = mapped_column(DecimalText)
+    transport_cost: Mapped[Decimal | None] = mapped_column(DecimalText)
+    prep_cost: Mapped[Decimal | None] = mapped_column(DecimalText)  # registration, safety gear, rental-ready work
+    rental_suitable: Mapped[str] = mapped_column(String(8), default="unknown")        # unknown|yes|no
+    rental_note: Mapped[str] = mapped_column(Text, default="")
+    inspection: Mapped[dict] = mapped_column(JSON, default=dict)  # item -> {"result": pass|fail|na, "note": ""}
+    funding_fund_id: Mapped[int | None] = mapped_column(ForeignKey("funds.id"))
+    stage: Mapped[str] = mapped_column(String(12), default="found")
+    # found | contacted | inspecting | negotiating | approved | owned | passed
+    offer: Mapped[Decimal | None] = mapped_column(DecimalText)
+    agreed_price: Mapped[Decimal | None] = mapped_column(DecimalText)
+    first_seen: Mapped[dt.date] = mapped_column(Date)
+    last_verified: Mapped[dt.date | None] = mapped_column(Date)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    price_history: Mapped[list["CandidatePrice"]] = relationship(back_populates="candidate",
+                                                                 order_by="CandidatePrice.day")
+    funding_fund: Mapped["Fund | None"] = relationship(foreign_keys=[funding_fund_id])
+
+
+class CandidatePrice(Base):
+    __tablename__ = "candidate_prices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("acquisition_candidates.id"))
+    day: Mapped[dt.date] = mapped_column(Date)
+    price: Mapped[Decimal] = mapped_column(DecimalText)
+    note: Mapped[str] = mapped_column(Text, default="")
+
+    candidate: Mapped[AcquisitionCandidate] = relationship(back_populates="price_history")

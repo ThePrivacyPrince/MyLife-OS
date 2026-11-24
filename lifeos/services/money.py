@@ -26,12 +26,14 @@ SPACES = {
     "holiday": "🎄 Holidays & gifts",
     "wants": "🎁 Wants",
     "reserves": "🛡️ Reserves",
+    "business": "💼 Business",
     "owed": "💳 Money I owe",
 }
 KINDS = ("save", "debt", "spend")
-DEFAULT_KIND = {"family": "spend", "holiday": "save", "wants": "save", "reserves": "save", "owed": "debt"}
+DEFAULT_KIND = {"family": "spend", "holiday": "save", "wants": "save", "reserves": "save", "business": "save",
+                "owed": "debt"}
 # Funding order for the paycheck splitter: obligations first, wants last.
-FUNDING_ORDER = ("owed", "reserves", "family", "holiday", "wants")
+FUNDING_ORDER = ("owed", "reserves", "family", "holiday", "business", "wants")
 PROTECTED_SPACES = ("owed", "reserves")
 ZERO = Decimal(0)
 CENT = Decimal("0.01")
