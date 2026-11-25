@@ -1840,6 +1840,9 @@ def role_header(rep) -> None:
     if r.url:
         bits.append(f"[posting]({r.url})")
     st.markdown(" · ".join(bits))
+    problem = (r.strategy or {}).get("problem", "").strip()
+    st.caption(f"🌐 **Solves:** {problem[:220]}{'…' if len(problem) > 220 else ''}" if problem else
+               "🌐 Start with **Big picture**: what problem does this seat solve for the organization?")
     rd = rep.readiness
     pct = lambda x: "-" if x is None else f"{round(x * 100)}%"
     m = st.columns(4)
@@ -1855,8 +1858,20 @@ def role_header(rep) -> None:
 def role_tabs(rep) -> None:
     r = rep.role
     rid = r.id
-    tabs = st.tabs(["🧭 Strategy", "✅ Requirements", "🎓 Study & proof", "🛠️ Tasks & stories", "📝 Notes",
-                    "⚙️ Status", "📄 Posting", "🕓 History"])
+    tabs = st.tabs(["🌐 Big picture", "🧭 Strategy", "✅ Requirements", "⚡ Automation", "🎓 Study & proof",
+                    "🛠️ Tasks & stories", "📝 Notes", "⚙️ Status", "📄 Posting", "🕓 History"])
+    tabs = list(tabs)
+    big, auto = tabs.pop(0), tabs.pop(2)
+    with big:
+        st.caption("Understand the seat before you sell yourself for it: where it sits, the problem it exists to solve, "
+                   "and how success is judged. Everything else (pitch, stories, automation ideas) should answer this.")
+        for k_, label, prompt in JP.BIG_PICTURE:
+            st.text_area(label, value=(r.strategy or {}).get(k_, ""), key=f"js{rid}{k_}", help=prompt,
+                         height=120 if k_ == "problem" else 90, placeholder=prompt)
+        st.button("Save big picture", type="primary", key=f"jbp{rid}", on_click=act, args=(lambda s: JB.save_strategy(
+            s, rid, {k_: val(f"js{rid}{k_}", "") for k_ in JP.BIG_PICTURE_KEYS}), "Big picture saved"))
+    with auto:
+        automation_tab(rep)
     with tabs[0]:
         st.caption("Write the plan for THIS role. Each section has a prompt - hover the ⓘ.")
         for k_, label, prompt in JP.STRATEGY:
@@ -1993,6 +2008,57 @@ def role_tabs(rep) -> None:
             arrow = f"{e.from_value} → {e.to_value}" if e.from_value and e.to_value else (e.to_value or e.from_value or "")
             st.markdown(f"- :gray[{e.at:%b %d %H:%M}] **{e.event_type.replace('_', ' ')}** {arrow}"
                         + (f" - _{e.reason}_" if e.reason else ""))
+
+
+def automation_tab(rep) -> None:
+    rid = rep.role.id
+    st.caption("Ways you'd remove manual work in this seat. Rank by impact vs effort; build one quick win into a small "
+               "demo so you can show it, not just say it. Use sample data only, never the employer's documents.")
+    with st.expander("🔎 Questions that find automation"):
+        for q in JP.AUTOMATION_PROMPTS:
+            st.markdown(f"- {q}")
+    for i in rep.ideas:
+        with st.container(border=True):
+            win = " :green-badge[⚡ quick win]" if JP.is_quick_win(i.impact, i.effort) else ""
+            st.markdown(f"{JP.IDEA_ICON[i.status]} **{i.title}**{win} :gray[· impact {i.impact} · effort {i.effort}]")
+            if i.pain or i.approach:
+                st.markdown((f"**Manual today:** {i.pain}  \n" if i.pain else "") +
+                            (f"**How:** {i.approach}" if i.approach else ""))
+            if i.link:
+                st.caption(f"🔗 {i.link}")
+            with st.popover("Edit / progress"):
+                st.text_input("Idea", value=i.title, key=f"ait{i.id}")
+                st.text_area("Manual step it removes", value=i.pain, key=f"aip{i.id}", height=70)
+                st.text_area("How you'd do it", value=i.approach, key=f"aia{i.id}", height=70)
+                c = st.columns(3)
+                c[0].selectbox("Impact", JP.IMPACTS, index=JP.IMPACTS.index(i.impact), key=f"aii{i.id}")
+                c[1].selectbox("Effort", JP.EFFORTS, index=JP.EFFORTS.index(i.effort), key=f"aie{i.id}")
+                c[2].selectbox("Status", JP.IDEA_STATUSES, index=JP.IDEA_STATUSES.index(i.status), key=f"ais{i.id}",
+                               format_func=lambda x: f"{JP.IDEA_ICON[x]} {x}")
+                st.text_input("Demo / repo / screenshot link", value=i.link, key=f"ail{i.id}")
+                b = st.columns(3)
+                b[0].button("Save", key=f"aiv{i.id}", type="primary", on_click=act, args=(
+                    lambda s, x=i.id: JB.update_idea(s, x, title=val(f"ait{x}"), pain=val(f"aip{x}"),
+                                                     approach=val(f"aia{x}"), impact=val(f"aii{x}"),
+                                                     effort=val(f"aie{x}"), status=val(f"ais{x}"), link=val(f"ail{x}")),
+                    "Idea saved"))
+                b[1].button("→ Prep task", key=f"aik{i.id}", help="Create a task to build a demo of this",
+                            on_click=act, args=(lambda s, x=i.id: JB.idea_to_task(s, x, day), "Demo task added - see Tasks"))
+                b[2].button("Remove", key=f"aix{i.id}", on_click=act, args=(
+                    lambda s, x=i.id: JB.remove_idea(s, x), "Idea removed"))
+    st.markdown("**➕ New idea**")
+    st.text_input("Idea", key=f"ain{rid}", placeholder="e.g. Auto-fill the contract tracker from signed agreements")
+    c = st.columns(2)
+    c[0].text_area("Manual step it removes", key=f"ainp{rid}", height=70,
+                   placeholder="e.g. Someone retypes parties, dates and renewal terms into a spreadsheet")
+    c[1].text_area("How you'd do it", key=f"aina{rid}", height=70,
+                   placeholder="e.g. Ironclad repository fields + a weekly renewal report; or a Python extractor")
+    c = st.columns([1, 1, 2])
+    c[0].selectbox("Impact", JP.IMPACTS, index=0, key=f"aini{rid}")
+    c[1].selectbox("Effort", JP.EFFORTS, index=0, key=f"aine{rid}")
+    c[2].button("Add idea", key=f"ainb{rid}", on_click=act, args=(lambda s: JB.add_idea(
+        s, rid, val(f"ain{rid}", ""), day, pain=val(f"ainp{rid}", ""), approach=val(f"aina{rid}", ""),
+        impact=val(f"aini{rid}"), effort=val(f"aine{rid}")), "Idea added"))
 
 
 def story_body(x) -> None:

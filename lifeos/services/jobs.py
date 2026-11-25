@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from lifeos.engines import jobprep as J
 from lifeos.errors import NotFound, ReasonRequired, ValidationError
-from lifeos.models import JobRole, RoleEvent, RoleLink, RoleRequirement, Story, Task, UnitProgress
+from lifeos.models import AutomationIdea, JobRole, RoleEvent, RoleLink, RoleRequirement, Story, Task, UnitProgress
 from lifeos.services import notes as N
 from lifeos.services import tasks as T
 from lifeos.services import university as UNI
@@ -96,7 +96,7 @@ def set_status(s: Session, role_id: int, status: str, today: dt.date, reason: st
 
 def save_strategy(s: Session, role_id: int, sections: dict[str, str]) -> JobRole:
     r = get_role(s, role_id)
-    unknown = set(sections) - set(J.STRATEGY_KEYS)
+    unknown = set(sections) - set(J.SECTION_KEYS)
     if unknown:
         raise ValidationError(f"Unknown strategy section(s): {', '.join(sorted(unknown))}.")
     merged = dict(r.strategy or {})
@@ -242,6 +242,70 @@ def suggestions(s: Session, role_id: int) -> list[tuple[str, list[str]]]:
     return [(k, terms) for k, terms in J.match_units(r.posting, cards) if k not in have]
 
 
+# ---------------------------------------------------------------- automation ideas
+def _check_idea_fields(impact: str, effort: str, status: str) -> None:
+    if impact not in J.IMPACTS or effort not in J.EFFORTS or status not in J.IDEA_STATUSES:
+        raise ValidationError("Impact, effort or status isn't one of the allowed values.")
+
+
+def add_idea(s: Session, role_id: int, title: str, today: dt.date, *, pain: str = "", approach: str = "",
+             impact: str = "medium", effort: str = "medium") -> AutomationIdea:
+    r = get_role(s, role_id)
+    title = (title or "").strip()
+    if not title:
+        raise ValidationError("Name the idea in a few words.")
+    _check_idea_fields(impact, effort, "idea")
+    idea = AutomationIdea(role_id=r.id, title=title[:200], pain=(pain or "").strip(), approach=(approach or "").strip(),
+                          impact=impact, effort=effort, created_on=today)
+    s.add(idea)
+    s.flush()
+    _log(s, r, "idea_added", to=idea.title)
+    return idea
+
+
+def get_idea(s: Session, idea_id: int) -> AutomationIdea:
+    i = s.get(AutomationIdea, idea_id)
+    if i is None:
+        raise NotFound(f"Idea {idea_id} not found.")
+    return i
+
+
+def update_idea(s: Session, idea_id: int, **fields) -> AutomationIdea:
+    i = get_idea(s, idea_id)
+    old_status = i.status
+    pick = lambda k: fields[k] if fields.get(k) is not None else getattr(i, k)
+    _check_idea_fields(pick("impact"), pick("effort"), pick("status"))  # validate before touching the row
+    if fields.get("title") is not None and not fields["title"].strip():
+        raise ValidationError("An idea needs a name.")
+    for k in ("title", "pain", "approach", "link"):
+        if fields.get(k) is not None:
+            setattr(i, k, fields[k].strip())
+    i.impact, i.effort, i.status = pick("impact"), pick("effort"), pick("status")
+    s.flush()
+    if i.status != old_status:
+        _log(s, get_role(s, i.role_id), "idea_status", old_status, f"{i.status}: {i.title}")
+    return i
+
+
+def remove_idea(s: Session, idea_id: int) -> None:
+    i = get_idea(s, idea_id)
+    _log(s, get_role(s, i.role_id), "idea_removed", frm=i.title)
+    s.delete(i)
+    s.flush()
+
+
+def ideas(s: Session, role_id: int) -> list[AutomationIdea]:
+    """Best first: quick wins and high impact-for-effort at the top; parked ideas last."""
+    rows = list(s.scalars(select(AutomationIdea).where(AutomationIdea.role_id == role_id)))
+    return sorted(rows, key=lambda i: (i.status == "parked", -J.idea_score(i.impact, i.effort), i.id))
+
+
+def idea_to_task(s: Session, idea_id: int, today: dt.date, due: dt.date | None = None) -> Task:
+    """Turn an idea into a prep task to build a small demo - something to show, not just say, in the interview."""
+    i = get_idea(s, idea_id)
+    return create_prep_task(s, i.role_id, f"Build a demo: {i.title}"[:200], today, due=due, priority=2)
+
+
 # ---------------------------------------------------------------- stories
 def add_story(s: Session, title: str, today: dt.date, *, situation: str = "", task: str = "", action: str = "",
               result: str = "", skills: list[str] | None = None) -> Story:
@@ -284,6 +348,7 @@ class RoleReport:
     stories: list[Story]
     repos: list[RoleLink]
     notes: list
+    ideas: list = field(default_factory=list)
     proof_from_study: list[tuple[str, str]] = field(default_factory=list)  # (unit_key, evidence)
     days_to_next: int | None = None
 
@@ -302,7 +367,7 @@ def report(s: Session, role_id: int, today: dt.date) -> RoleReport:
     return RoleReport(
         role=r, readiness=J.readiness([q.strength for q in r.requirements], list(levels.values())),
         unit_levels=levels, tasks=tasks, stories=sts, repos=[ln for ln in r.links if ln.kind == "repo"],
-        notes=N.find(s, role_id=r.id, unit_keys=units), proof_from_study=proof,
+        notes=N.find(s, role_id=r.id, unit_keys=units), ideas=ideas(s, r.id), proof_from_study=proof,
         days_to_next=(r.next_step_date - today).days if r.next_step_date else None,
     )
 

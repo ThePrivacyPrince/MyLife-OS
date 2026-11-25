@@ -707,3 +707,19 @@ class Story(Base):
     skills: Mapped[list] = mapped_column(JSON, default=list)
     created_on: Mapped[dt.date] = mapped_column(Date)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AutomationIdea(Base):
+    """An automation idea for a role: the manual pain, how you'd fix it, and how far you've built it."""
+
+    __tablename__ = "job_automation_ideas"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("job_roles.id"))
+    title: Mapped[str] = mapped_column(String(200))
+    pain: Mapped[str] = mapped_column(Text, default="")       # the manual step it removes
+    approach: Mapped[str] = mapped_column(Text, default="")   # how: tool, script, workflow
+    impact: Mapped[str] = mapped_column(String(8), default="medium")
+    effort: Mapped[str] = mapped_column(String(8), default="medium")
+    status: Mapped[str] = mapped_column(String(12), default="idea")
+    link: Mapped[str] = mapped_column(String(500), default="")  # demo, repo, screenshot
+    created_on: Mapped[dt.date] = mapped_column(Date)

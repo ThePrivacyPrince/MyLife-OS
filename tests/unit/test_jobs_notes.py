@@ -141,3 +141,37 @@ def test_job06_links_tasks_stories_and_study_flow_into_the_role(s):
     ln = next(x for x in r.links if x.kind == "repo")
     JB.unlink(s, ln.id)
     assert not [x for x in r.links if x.kind == "repo"]
+
+
+def test_job07_big_picture_is_part_of_the_role_strategy(s):
+    r = JB.create_role(s, "Acme", "Legal Ops", T)
+    JB.save_strategy(s, r.id, {"problem": "Attorneys spend hours on routine NDAs; deals stall at quarter-end",
+                               "where": "Legal team, serves Sales and Finance"})
+    assert r.strategy["problem"].startswith("Attorneys") and set(J.BIG_PICTURE_KEYS) <= set(J.SECTION_KEYS)
+    JB.save_strategy(s, r.id, {"pitch": "x"})
+    assert r.strategy["where"] == "Legal team, serves Sales and Finance"  # sections merge, never wipe each other
+
+
+def test_job08_automation_ideas_rank_progress_and_become_tasks(s):
+    assert J.idea_score("high", "small") == 9 and J.idea_score("low", "large") == 1
+    assert J.is_quick_win("high", "small") and not J.is_quick_win("high", "medium")
+    r = JB.create_role(s, "Acme", "Legal Ops", T)
+    slow = JB.add_idea(s, r.id, "Full CLM migration", T, impact="high", effort="large")
+    win = JB.add_idea(s, r.id, "Renewal reminders from repository dates", T, pain="Renewals tracked from memory",
+                      approach="Notice-date field + weekly report", impact="high", effort="small")
+    meh = JB.add_idea(s, r.id, "Prettier tracker", T, impact="low", effort="small")
+    assert [i.id for i in JB.ideas(s, r.id)] == [win.id, slow.id, meh.id]  # 9, then 3 vs 3 by age
+    JB.update_idea(s, win.id, status="prototype", link="github.com/me/renewals-demo")
+    JB.update_idea(s, slow.id, status="parked")
+    assert JB.ideas(s, r.id)[-1].id == slow.id  # parked sinks to the bottom
+    with pytest.raises(ValidationError):
+        JB.update_idea(s, win.id, impact="huge")
+    with pytest.raises(ValidationError):
+        JB.add_idea(s, r.id, " ", T)
+    task = JB.idea_to_task(s, win.id, T)
+    assert task.title == "Build a demo: Renewal reminders from repository dates"
+    rep = JB.report(s, r.id, T)
+    assert task.id in [t.id for t in rep.tasks] and rep.ideas[0].id == win.id
+    JB.remove_idea(s, meh.id)
+    kinds = [e.event_type for e in s.scalars(select(RoleEvent).where(RoleEvent.role_id == r.id))]
+    assert kinds.count("idea_added") == 3 and kinds.count("idea_status") == 2 and "idea_removed" in kinds

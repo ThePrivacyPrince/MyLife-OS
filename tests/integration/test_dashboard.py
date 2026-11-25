@@ -337,6 +337,14 @@ def test_int25_job_prep_role_to_strategy_requirements_and_task(seeded_db):
     at.text_area(key=f"js{rid}pitch").set_value("GRC analyst who already reviews vendor MSAs and DPAs")
     [b for b in at.button if b.label == "Save strategy"][0].click().run()
     assert any("Strategy saved" in x.value for x in at.success)
+    at.text_area(key=f"js{rid}problem").set_value("Attorneys lose hours to routine contracts")
+    [b for b in at.button if b.label == "Save big picture"][0].click().run()
+    assert any("Big picture saved" in x.value for x in at.success)
+    at.text_input(key=f"ain{rid}").set_value("Renewal reminders from repository dates")
+    [b for b in at.button if b.label == "Add idea"][0].click().run()
+    assert any("Idea added" in x.value for x in at.success), [e.value for e in at.error]
+    [b for b in at.button if b.label == "→ Prep task"][0].click().run()
+    assert any("Demo task added" in x.value for x in at.success), [e.value for e in at.error]
     at.text_input(key=f"jt{rid}").set_value("Timed NDA redline")
     [b for b in at.button if b.label == "Add task"][0].click().run()
     assert any("Prep task added" in x.value for x in at.success), [e.value for e in at.error]

@@ -11,6 +11,18 @@
   - Paste the posting (postings get taken down).
   - Its bullet points become your **requirements**.
   - Link the University courses that prepare you.
+- **🌐 Big picture (first tab):** understand the seat before you sell yourself for it.
+  - Where the role sits: team, manager, who it serves.
+  - The problem it solves: why the seat exists and what breaks when it's empty.
+  - What success looks like after 90 days.
+  - How it connects to the company's goals.
+  - The "Solves" line shows at the top of the role.
+- **⚡ Automation:** ideas for removing manual work in this seat.
+  - Each idea records the manual step it removes, how you'd fix it, impact and effort.
+  - Quick wins (high impact, small effort) rise to the top, and parked ideas sink to the bottom.
+  - Track progress: 💡 idea → 🧪 prototype → 🚀 demo-ready, with a demo or repo link.
+  - **→ Prep task** turns an idea into a "Build a demo" task.
+  - Seven built-in questions help you find automation in any role. Use sample data only, never an employer's documents.
 - **🧭 Strategy:** nine sections, each with a prompt: their top 3 needs, one-line pitch, proof points, gaps and how you're closing them, stories, questions to ask, 30-60-90 day plan, company research, logistics.
 - **✅ Requirements:** what they want vs what you can prove. Rate each 🟢 strong / 🟡 partial / 🔴 gap / ⚪ not rated, and write the proof.
 - **🎓 Study & proof:**
@@ -34,4 +46,4 @@
 ## Privacy
 Roles, notes and stories live only in your local database (`data/`, git-ignored). Nothing here goes to Git.
 
-Tests: `tests/unit/test_jobs_notes.py` (NOTE-01..02, JOB-01..06), `test_int24`, `test_int25`.
+Tests: `tests/unit/test_jobs_notes.py` (NOTE-01..02, JOB-01..08), `test_int24`, `test_int25`.
