@@ -34,6 +34,9 @@ Business · Relationships · Environment · Finances · Education.
   and fleet tracking. Purchases never touch protected reserves ([details](docs/deals.md)).
 - **Personal University:** 8 departments, Rule-of-One semesters, research-backed courses, flashcards with spaced
   review, earned mastery, history inquiries, exams and hands-on skills ([details](docs/university.md)).
+- **Notes and Job Prep:** a daily study journal tied to courses, units and roles; a Jobs page with a strategy per
+  role, requirements-vs-proof matrix, linked study, prep tasks, a STAR story bank and evidence-only readiness
+  ([details](docs/jobs.md)).
 - **Tasks by pillar:** All tasks opens grouped by pillar, then overdue / this week / later / no date / waiting,
   with a side-by-side Board view.
 - **Edit anything:** one ✏️ form per task or routine. The audit rules still apply, and a reason is asked for

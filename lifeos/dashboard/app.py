@@ -29,6 +29,9 @@ from lifeos.services import outcomes as O
 from lifeos.services import money as M
 from lifeos.services import acquisitions as Q
 from lifeos.services import university as UNI
+from lifeos.services import notes as NT
+from lifeos.services import jobs as JB
+from lifeos.engines import jobprep as JP
 from lifeos.engines import learning as LRN
 from lifeos.engines import acquisition as AQ
 from lifeos.services import weekly as W
@@ -86,8 +89,8 @@ def val(key: str, default=None):
 
 # ------------------------------------------------------------------ sidebar
 st.sidebar.title("◎ LIFE OS")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Add", "Recurring", "All tasks",
-         "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Jobs", "Add", "Recurring",
+         "All tasks", "Review"]
 page = st.sidebar.radio("View", PAGES, label_visibility="collapsed", key="nav")
 day: dt.date = st.sidebar.date_input("Planning date", value=get_settings().today())
 pillar_filter = st.sidebar.multiselect("Pillars", list(ICON), format_func=lambda c: f"{ICON[c]} {c}")
@@ -1081,7 +1084,7 @@ def unit_panel(u: dict, checked: set) -> None:
     if not prog or not prog.started_on:
         st.button("Start this unit", key=f"us{k}", type="primary", on_click=act, args=(
             lambda s: UNI.start_unit(s, key, day), "Unit started - its flashcards join your reviews"))
-    t1, t2, t3, t4, t5 = st.tabs(["📖 Learn", "🧠 Recall", "✅ Test", "🔨 Apply", "🃏 Cards"])
+    t1, t2, t3, t4, t5, t6 = st.tabs(["📖 Learn", "🧠 Recall", "✅ Test", "🔨 Apply", "🃏 Cards", "📝 Notes"])
     with t1:
         st.markdown("**You'll be able to:**  \n" + "  \n".join(f"• {o}" for o in u["objectives"]))
         st.markdown(u["learn"])
@@ -1131,6 +1134,95 @@ def unit_panel(u: dict, checked: set) -> None:
     with t5:
         for c in UNI.cards_for(key):
             st.markdown(f"**{c['term']}** {'🔤' if c['kind'] == 'acronym' else ''} — {c['definition']}")
+    with t6:
+        st.text_area("Today's note on this unit", key=f"un{k}", height=90, label_visibility="collapsed",
+                     placeholder="What clicked, what confused you, where you'd use it. #tags work.")
+        st.button("Save note", key=f"uns{k}", on_click=act, args=(lambda s: NT.add_note(
+            s, day, val(f"un{k}", ""), unit_key=key), "Note saved"))
+        for n in NT.find(s, unit_keys=[key]):
+            note_card(n, f"u{k}")
+
+
+def note_label(n) -> str:
+    bits = [f"{n.day:%a %b} {n.day.day}"]
+    if n.unit_key:
+        bits.append(f"{n.unit_key} · {UNI.unit(n.unit_key)['title'][:48]}")
+    elif n.course_code:
+        bits.append(n.course_code)
+    if n.role_id:
+        r = s.get(JB.JobRole, n.role_id)
+        if r:
+            bits.append(f"💼 {r.title} @ {r.company}")
+    return " · ".join(bits)
+
+
+def note_card(n, prefix: str) -> None:
+    """One note, with edit and delete tucked into a popover."""
+    with st.container(border=True):
+        head = st.columns([6, 1])
+        head[0].caption(note_label(n) + (" · " + " ".join(f"`#{x}`" for x in n.tags) if n.tags else ""))
+        if n.title:
+            head[0].markdown(f"**{n.title}**")
+        head[0].markdown(n.body)
+        with head[1].popover("✏️", use_container_width=True):
+            st.text_area("Edit", value=n.body, key=f"ne{prefix}{n.id}", height=140)
+            st.button("Save", key=f"nes{prefix}{n.id}", on_click=act, args=(
+                lambda s, i=n.id: NT.edit_note(s, i, val(f"ne{prefix}{i}", "")), "Note updated"))
+            st.button("Delete", key=f"ned{prefix}{n.id}", on_click=act, args=(
+                lambda s, i=n.id: NT.delete_note(s, i), "Note deleted"))
+
+
+def notes_view() -> None:
+    """The University journal: today's notes first, then everything, searchable."""
+    c = st.columns([3, 1])
+    with c[0]:
+        st.markdown(f"**📝 Notes for {day:%A, %b} {day.day}**")
+        st.text_input("Title (optional)", key="nt_title", placeholder="e.g. DPA sub-processor terms")
+        st.text_area("Notes", key="nt_body", height=160, label_visibility="collapsed",
+                     placeholder="What you learned today, in your own words. Questions, examples, where you'd use it. "
+                                 "#tags make it findable.")
+        active = UNI.active_courses(day)
+        cc = st.columns(3)
+        course = cc[0].selectbox("Course", [None] + [co["code"] for co in UNI.courses()], key="nt_course",
+                                 index=None, placeholder="Course (optional)",
+                                 format_func=lambda x: "-" if x is None else f"{x} · {UNI.course(x)['title']}")
+        units = UNI.units(course) if course else []
+        cc[1].selectbox("Unit", [None] + [u["key"] for u in units], key="nt_unit", index=None,
+                        placeholder="Unit (optional)", disabled=not units,
+                        format_func=lambda x: "-" if x is None else f"{x} · {UNI.unit(x)['title'][:40]}")
+        open_roles = JB.roles(s)
+        cc[2].selectbox("Useful for a role", [None] + [r.id for r in open_roles], key="nt_role", index=None,
+                        placeholder="Job role (optional)",
+                        format_func=lambda i: "-" if i is None else next(f"💼 {r.title} @ {r.company}"
+                                                                         for r in open_roles if r.id == i))
+        st.button("Save note", type="primary", key="nt_save", on_click=act, args=(lambda s: NT.add_note(
+            s, day, val("nt_body", ""), title=val("nt_title", ""), course_code=val("nt_course"),
+            unit_key=val("nt_unit"), role_id=val("nt_role")), "Note saved"))
+        if active and not course:
+            st.caption("Tip: pick the course and unit - the note then shows up inside that unit too, and on any job "
+                       "role linked to it.")
+    with c[1]:
+        st.metric("Days in a row", NT.streak(s, day))
+        st.metric("Notes today", len(NT.find(s, day=day)))
+        tags = NT.all_tags(s)
+        if tags:
+            st.caption("Tags: " + " · ".join(f"#{t} ({n})" for t, n in tags[:15]))
+    st.divider()
+    f = st.columns([2, 1, 1])
+    q = f[0].text_input("Search notes", key="nt_q", placeholder="Search notes", label_visibility="collapsed")
+    tag = f[1].selectbox("Tag", [None] + [t for t, _ in NT.all_tags(s)], key="nt_tag", index=None,
+                         placeholder="Any tag", label_visibility="collapsed")
+    only = f[2].selectbox("Course filter", [None] + [co["code"] for co in UNI.courses()], key="nt_fc", index=None,
+                          placeholder="Any course", label_visibility="collapsed")
+    rows = NT.find(s, query=q or "", tag=tag, course_code=only)
+    if not rows:
+        st.caption("No notes yet." if not (q or tag or only) else "No notes match.")
+    last = None
+    for n in rows[:100]:
+        if n.day != last:
+            st.markdown(f"##### {n.day:%A, %b} {n.day.day}" + (" · today" if n.day == day else ""))
+            last = n.day
+        note_card(n, "j")
 
 
 def quiz_submit(unit_key: str, qi: int, q: dict, widget: str) -> None:
@@ -1193,7 +1285,7 @@ def page_university() -> None:
     c[2].metric("Units applied", f"{sum(r.applied for r in reports)}/{total_units}" if total_units else "-")
     c[3].metric("Units mastered", f"{sum(r.mastered for r in reports)}/{total_units}" if total_units else "-")
     SS.setdefault("uni_view", "This semester")
-    view = st.segmented_control("View", ["This semester", "Review", "Catalog", "Library", "History", "Exams",
+    view = st.segmented_control("View", ["This semester", "Review", "Notes", "Catalog", "Library", "History", "Exams",
                                          "Hands-on", "Report card"], key="uni_view", label_visibility="collapsed") \
         or "This semester"
     if view == "This semester":
@@ -1225,6 +1317,8 @@ def page_university() -> None:
                         unit_panel(u, checked)
     elif view == "Review":
         review_session()
+    elif view == "Notes":
+        notes_view()
     elif view == "Catalog":
         for d in UNI.departments():
             cs = UNI.courses(dept=d["code"])
@@ -1719,6 +1813,277 @@ def do_ics_import() -> None:
         flash("success", f"Calendar imported: {result['added']} new, {result['updated']} updated.")
 
 
+# ------------------------------------------------------------------ jobs
+def _new_role(s_) -> None:
+    r = JB.create_role(s_, val("jr_company", ""), val("jr_title", ""), day, url=val("jr_url", ""),
+                       posting=val("jr_posting", ""))
+    n = JB.import_requirements(s_, r.id) if val("jr_import", True) else 0
+    for code in val("jr_courses", []) or []:
+        JB.link(s_, r.id, "course", code)
+    SS["job_sel"] = r.id
+    SS["job_view"] = "Roles"
+    SS["jr_added"] = n
+
+
+def role_header(rep) -> None:
+    r = rep.role
+    st.markdown(f"### {JP.STATUS_ICON[r.status]} {r.title} · {r.company}")
+    bits = [f"**{r.status}**"]
+    if r.applied_on:
+        bits.append(f"applied {r.applied_on:%b} {r.applied_on.day}")
+    if r.next_step:
+        when = ""
+        if rep.days_to_next is not None:
+            d = rep.days_to_next
+            when = " today" if d == 0 else (f" :red[{-d} day(s) overdue]" if d < 0 else f" in {d} day(s)")
+        bits.append(f"next: {r.next_step}{when}")
+    if r.url:
+        bits.append(f"[posting]({r.url})")
+    st.markdown(" · ".join(bits))
+    rd = rep.readiness
+    pct = lambda x: "-" if x is None else f"{round(x * 100)}%"
+    m = st.columns(4)
+    m[0].metric("Readiness", pct(rd.overall), help="Average of requirements proven and study applied. "
+                "Only evidence counts - a requirement you haven't rated counts as zero.")
+    m[1].metric("Requirements proven", pct(rd.requirements),
+                help=" · ".join(f"{JP.STRENGTH_ICON[k]} {k} {v}" for k, v in rd.counts.items()))
+    m[2].metric("Linked study applied", pct(rd.study))
+    open_tasks = [t for t in rep.tasks if t.status in OPEN_STATES]
+    m[3].metric("Prep tasks open", len(open_tasks))
+
+
+def role_tabs(rep) -> None:
+    r = rep.role
+    rid = r.id
+    tabs = st.tabs(["🧭 Strategy", "✅ Requirements", "🎓 Study & proof", "🛠️ Tasks & stories", "📝 Notes",
+                    "⚙️ Status", "📄 Posting", "🕓 History"])
+    with tabs[0]:
+        st.caption("Write the plan for THIS role. Each section has a prompt - hover the ⓘ.")
+        for k_, label, prompt in JP.STRATEGY:
+            st.text_area(label, value=(r.strategy or {}).get(k_, ""), key=f"js{rid}{k_}", help=prompt,
+                         height=110 if k_ in ("needs", "proof", "gaps", "plan") else 80, placeholder=prompt)
+        st.button("Save strategy", type="primary", key=f"jss{rid}", on_click=act, args=(lambda s: JB.save_strategy(
+            s, rid, {k_: val(f"js{rid}{k_}", "") for k_ in JP.STRATEGY_KEYS}), "Strategy saved"))
+    with tabs[1]:
+        st.caption("What they want vs what you can prove. 🟢 strong (you have proof) · 🟡 partial · 🔴 gap · ⚪ not rated. "
+                   "For a gap: link a unit or make a prep task, so it closes.")
+        if r.posting.strip():
+            st.button("Import requirements from the posting's bullet points", key=f"jri{rid}", on_click=act, args=(
+                lambda s: JB.import_requirements(s, rid), "Requirements imported (duplicates skipped)"))
+        for q in r.requirements:
+            with st.container(border=True):
+                c = st.columns([5, 2, 1])
+                c[0].markdown(f"{JP.STRENGTH_ICON[q.strength]} **{q.text}**")
+                c[1].selectbox("Strength", JP.STRENGTHS, index=JP.STRENGTHS.index(q.strength), key=f"jrs{q.id}",
+                               label_visibility="collapsed", format_func=lambda x: f"{JP.STRENGTH_ICON[x]} {x}")
+                c[2].button("✕", key=f"jrx{q.id}", help="Remove", on_click=act, args=(
+                    lambda s, i=q.id: JB.remove_requirement(s, i), "Requirement removed"))
+                c[0].text_input("Evidence", value=q.evidence, key=f"jre{q.id}", label_visibility="collapsed",
+                                placeholder="Proof: what you did, numbers, a repo, a portfolio piece")
+                c[1].button("Save", key=f"jrv{q.id}", on_click=act, args=(lambda s, i=q.id: JB.update_requirement(
+                    s, i, strength=val(f"jrs{i}"), evidence=val(f"jre{i}", "")), "Saved"))
+        c = st.columns([5, 1])
+        c[0].text_input("Add a requirement", key=f"jrn{rid}", label_visibility="collapsed",
+                        placeholder="Add a requirement in your own words")
+        c[1].button("Add", key=f"jrna{rid}", on_click=act, args=(lambda s: JB.add_requirement(
+            s, rid, val(f"jrn{rid}", "")), "Requirement added"))
+    with tabs[2]:
+        st.caption("Link University courses or units to this role. Their progress counts toward readiness, notes on "
+                   "them show up here, and applied evidence becomes proof you can cite.")
+        for ln in [x for x in r.links if x.kind in ("course", "unit")]:
+            c = st.columns([6, 1])
+            label = UNI.course(ln.ref)["title"] if ln.kind == "course" else UNI.unit(ln.ref)["title"]
+            c[0].markdown(f"🎓 **{ln.ref}** · {label}")
+            c[1].button("Unlink", key=f"jul{ln.id}", on_click=act, args=(lambda s, i=ln.id: JB.unlink(s, i), "Unlinked"))
+        if rep.unit_levels:
+            st.markdown(" ".join(f"{LRN.LEVEL_ICON[lv]}" for lv in rep.unit_levels.values()) +
+                        f" :gray[· {sum(lv in ('applied', 'mastered') for lv in rep.unit_levels.values())}/"
+                        f"{len(rep.unit_levels)} units applied]")
+        sug = JB.suggestions(s, rid)
+        if sug:
+            st.markdown("**Suggested from your University** - the posting uses these terms:")
+            for uk, terms in sug[:6]:
+                c = st.columns([6, 1])
+                c[0].markdown(f"{uk} · {UNI.unit(uk)['title']}  \n:gray[{', '.join(terms)}]")
+                c[1].button("Link", key=f"jsu{rid}{uk}", on_click=act, args=(
+                    lambda s, u_=uk: JB.link(s, rid, "unit", u_), f"Linked {uk}"))
+        c = st.columns([5, 1])
+        c[0].selectbox("Link a course", [co["code"] for co in UNI.courses()], key=f"jlc{rid}", index=None,
+                       placeholder="Link a whole course", label_visibility="collapsed",
+                       format_func=lambda x: f"{x} · {UNI.course(x)['title']}")
+        c[1].button("Link", key=f"jlcb{rid}", on_click=act, args=(lambda s: JB.link(
+            s, rid, "course", val(f"jlc{rid}") or ""), "Course linked"))
+        if rep.proof_from_study:
+            st.markdown("**Proof from your study** (applied units)")
+            for uk, ev in rep.proof_from_study:
+                st.markdown(f"- 🟢 {uk}: {ev}")
+        st.markdown("**Repos and portfolio pieces**")
+        for ln in rep.repos:
+            c = st.columns([6, 1])
+            c[0].markdown(f"🔗 {ln.ref}" + (f" - {ln.note}" if ln.note else ""))
+            c[1].button("Unlink", key=f"jrl{ln.id}", on_click=act, args=(lambda s, i=ln.id: JB.unlink(s, i), "Unlinked"))
+        c = st.columns([3, 3, 1])
+        c[0].text_input("Repo or piece", key=f"jrp{rid}", label_visibility="collapsed",
+                        placeholder="github.com/you/repo or 'NDA redline + memo'")
+        c[1].text_input("Why it matters", key=f"jrpn{rid}", label_visibility="collapsed",
+                        placeholder="What it proves for this role")
+        c[2].button("Add", key=f"jrpa{rid}", on_click=act, args=(lambda s: JB.link(
+            s, rid, "repo", val(f"jrp{rid}", ""), val(f"jrpn{rid}", "")), "Added"))
+    with tabs[3]:
+        st.markdown("**Prep tasks** - real tasks: they show on Today and in the Planner.")
+        for t in rep.tasks:
+            due = f" · due {t.due_date:%b} {t.due_date.day}" if t.due_date else ""
+            done = t.status not in OPEN_STATES
+            st.markdown(f"- {'✅' if done else '⬜'} {'~~' if done else ''}{t.title}{'~~' if done else ''} "
+                        f":gray[P{t.priority} · {t.status}{due}]")
+        c = st.columns([4, 2, 1, 1])
+        c[0].text_input("Task", key=f"jt{rid}", label_visibility="collapsed",
+                        placeholder="e.g. Timed NDA redline (45 min)")
+        c[1].date_input("Due", value=None, key=f"jtd{rid}", label_visibility="collapsed")
+        c[2].selectbox("Priority", [1, 2, 3], index=1, key=f"jtp{rid}", label_visibility="collapsed",
+                       format_func=lambda x: f"P{x}")
+        c[3].button("Add task", key=f"jta{rid}", on_click=act, args=(lambda s: JB.create_prep_task(
+            s, rid, val(f"jt{rid}", ""), day, due=val(f"jtd{rid}"), priority=val(f"jtp{rid}", 2)), "Prep task added"))
+        st.markdown("**Stories for this role**")
+        for st_ in rep.stories:
+            with st.expander(f"⭐ {st_.title}"):
+                story_body(st_)
+        mine = {x.id for x in rep.stories}
+        others = [x for x in JB.stories(s) if x.id not in mine]
+        if others:
+            c = st.columns([5, 1])
+            c[0].selectbox("Link a story", [x.id for x in others], key=f"jls{rid}", index=None,
+                           placeholder="Link a story from your bank", label_visibility="collapsed",
+                           format_func=lambda i: next(x.title for x in others if x.id == i))
+            c[1].button("Link", key=f"jlsb{rid}", on_click=act, args=(lambda s: JB.link(
+                s, rid, "story", str(val(f"jls{rid}") or "")), "Story linked"))
+        else:
+            st.caption("Add stories on the **Story bank** tab - write each once, reuse it for every role.")
+    with tabs[4]:
+        st.text_area("Job prep note", key=f"jn{rid}", height=110, label_visibility="collapsed",
+                     placeholder="Recruiter call notes, research, interview debrief, what to say differently. #tags work.")
+        st.button("Save note", key=f"jns{rid}", on_click=act, args=(lambda s: NT.add_note(
+            s, day, val(f"jn{rid}", ""), role_id=rid), "Note saved"))
+        st.caption("Includes your study notes on units linked to this role.")
+        for n in rep.notes:
+            note_card(n, f"r{rid}")
+    with tabs[5]:
+        c = st.columns([2, 3, 1])
+        c[0].selectbox("Status", JP.STATUSES, index=JP.STATUSES.index(r.status), key=f"jst{rid}",
+                       format_func=lambda x: f"{JP.STATUS_ICON[x]} {x}")
+        c[1].text_input("Reason (required to close)", key=f"jstr{rid}")
+        c[2].button("Update", key=f"jstb{rid}", on_click=act, args=(lambda s: JB.set_status(
+            s, rid, val(f"jst{rid}"), day, val(f"jstr{rid}")), "Status updated"))
+        c = st.columns([3, 2, 1])
+        c[0].text_input("Next step", value=r.next_step, key=f"jnx{rid}", placeholder="e.g. Phone screen with recruiter")
+        c[1].date_input("When", value=r.next_step_date, key=f"jnxd{rid}")
+        c[2].button("Save", key=f"jnxb{rid}", on_click=act, args=(lambda s: JB.set_next_step(
+            s, rid, val(f"jnx{rid}", ""), val(f"jnxd{rid}")), "Next step saved - it shows on Today"))
+    with tabs[6]:
+        c = st.columns(2)
+        c[0].text_input("Company", value=r.company, key=f"jpc{rid}")
+        c[1].text_input("Title", value=r.title, key=f"jpt{rid}")
+        st.text_input("Link to the posting", value=r.url, key=f"jpu{rid}")
+        st.text_area("Posting text (paste it - postings disappear)", value=r.posting, key=f"jpp{rid}", height=260)
+        st.button("Save posting", key=f"jpb{rid}", on_click=act, args=(lambda s: JB.update_role(
+            s, rid, company=val(f"jpc{rid}"), title=val(f"jpt{rid}"), url=val(f"jpu{rid}"),
+            posting=val(f"jpp{rid}")), "Saved"))
+    with tabs[7]:
+        for e in reversed(r.events):
+            arrow = f"{e.from_value} → {e.to_value}" if e.from_value and e.to_value else (e.to_value or e.from_value or "")
+            st.markdown(f"- :gray[{e.at:%b %d %H:%M}] **{e.event_type.replace('_', ' ')}** {arrow}"
+                        + (f" - _{e.reason}_" if e.reason else ""))
+
+
+def story_body(x) -> None:
+    for lab, v in (("Situation", x.situation), ("Task", x.task), ("Action", x.action), ("Result", x.result)):
+        if v:
+            st.markdown(f"**{lab}:** {v}")
+    if x.skills:
+        st.caption("Shows: " + ", ".join(x.skills))
+
+
+def story_form(x=None) -> None:
+    p = f"sb{x.id}" if x else "sbn"
+    st.text_input("Title", value=x.title if x else "", key=f"{p}t", placeholder="e.g. Got a vendor to accept a 24-hour breach notice")
+    c = st.columns(2)
+    c[0].text_area("Situation", value=x.situation if x else "", key=f"{p}s", height=90, placeholder="Context in 1-2 sentences")
+    c[1].text_area("Task", value=x.task if x else "", key=f"{p}k", height=90, placeholder="What you were responsible for")
+    c[0].text_area("Action", value=x.action if x else "", key=f"{p}a", height=110, placeholder="What YOU did - the steps, your judgment calls")
+    c[1].text_area("Result", value=x.result if x else "", key=f"{p}r", height=110, placeholder="The outcome. Numbers if you have them; don't invent any.")
+    st.text_input("Skills it shows (comma-separated)", value=", ".join(x.skills) if x else "", key=f"{p}x",
+                  placeholder="negotiation, contract review, escalation judgment")
+    fields = lambda: dict(title=val(f"{p}t", ""), situation=val(f"{p}s", ""), task=val(f"{p}k", ""),
+                          action=val(f"{p}a", ""), result=val(f"{p}r", ""), skills=val(f"{p}x", "").split(","))
+    if x:
+        st.button("Save story", key=f"{p}b", on_click=act, args=(lambda s: JB.update_story(s, x.id, **fields()), "Story saved"))
+    else:
+        st.button("Add story", type="primary", key=f"{p}b", on_click=act, args=(
+            lambda s: JB.add_story(s, today=day, **fields()), "Story added to your bank"))
+
+
+def page_jobs() -> None:
+    st.title("💼 Job Prep")
+    open_roles = JB.roles(s)
+    soon = JB.coming_up(s, day, 14)
+    c = st.columns(4)
+    c[0].metric("Open roles", len(open_roles))
+    c[1].metric("Interviewing", sum(r.status == "interviewing" for r in open_roles))
+    if soon:
+        d = (soon[0].next_step_date - day).days
+        c[2].metric("Next step", "today" if d == 0 else (f"{-d}d overdue" if d < 0 else f"in {d}d"),
+                    help=f"{soon[0].next_step} · {soon[0].title} @ {soon[0].company}")
+    else:
+        c[2].metric("Next step", "-")
+    c[3].metric("Stories in bank", len(JB.stories(s)))
+    SS.setdefault("job_view", "Roles" if open_roles else "Add role")
+    view = st.segmented_control("Jobs view", ["Roles", "Story bank", "Add role"], key="job_view",
+                                label_visibility="collapsed") or "Roles"
+    if view == "Add role":
+        st.caption("Paste the posting - postings get taken down, and the bullet points become your requirements list.")
+        c = st.columns(2)
+        c[0].text_input("Company", key="jr_company")
+        c[1].text_input("Job title", key="jr_title")
+        st.text_input("Link to the posting (optional)", key="jr_url")
+        st.text_area("Posting text", key="jr_posting", height=220)
+        st.checkbox("Turn the posting's bullet points into requirements", value=True, key="jr_import")
+        st.multiselect("Link University courses that prepare you", [co["code"] for co in UNI.courses()],
+                       key="jr_courses", format_func=lambda x: f"{x} · {UNI.course(x)['title']}")
+        st.button("Create role", type="primary", on_click=act, args=(_new_role, "Role created - write your strategy next"))
+        return
+    if view == "Story bank":
+        st.caption("Interview stories in STAR form (Situation, Task, Action, Result). Write each once; link it to "
+                   "every role where it answers a likely question.")
+        with st.expander("➕ New story", expanded=not JB.stories(s)):
+            story_form()
+        for x in JB.stories(s):
+            used = [r for r in JB.roles(s, include_closed=True) if str(x.id) in JB.refs(r, "story")]
+            with st.expander(f"⭐ {x.title}" + (f" · used for {len(used)} role(s)" if used else "")):
+                story_body(x)
+                if used:
+                    st.caption("Linked to: " + ", ".join(f"{r.title} @ {r.company}" for r in used))
+                with st.popover("Edit story"):
+                    story_form(x)
+        return
+    show_closed = st.toggle("Show closed roles", key="job_closed")
+    rows = JB.roles(s, include_closed=show_closed)
+    if not rows:
+        st.info("No roles yet. Use **Add role** to start one.")
+        return
+    ids = [r.id for r in rows]
+    if SS.get("job_sel") not in ids:
+        SS["job_sel"] = ids[0]
+    st.selectbox("Role", ids, key="job_sel", label_visibility="collapsed",
+                 format_func=lambda i: next(f"{JP.STATUS_ICON[r.status]} {r.title} @ {r.company} · {r.status}"
+                                            for r in rows if r.id == i))
+    if SS.pop("jr_added", None):
+        st.caption("Requirements came from the posting's bullet points - rate each one against your proof.")
+    rep = JB.report(s, SS["job_sel"], day)
+    with st.container(border=True):
+        role_header(rep)
+    role_tabs(rep)
+
+
 def page_planner() -> None:
     a, v = _pl_anchor(), _pl_view()
     top = st.columns([2.6, 0.55, 0.9, 0.55, 3.4])
@@ -1771,6 +2136,10 @@ def page_today() -> None:
     _due = len(UNI.due_cards(s, day, _m, _low))
     if _due:
         st.caption(f"🧠 {_due} flashcard(s) due · ~{max(1, _due * LRN.SECONDS_PER_CARD // 60)} min - University → Review")
+    for r in JB.coming_up(s, day, 7):
+        d = (r.next_step_date - day).days
+        when = "today" if d == 0 else (f"{-d} day(s) overdue" if d < 0 else f"in {d} day(s)")
+        st.caption(f"💼 **{r.next_step or 'Next step'}** {when} · {r.title} @ {r.company} - Jobs page")
     today_blocks = P.blocks_between(s, day, day)
     if today_blocks:
         st.caption("📅 Schedule: " + " · ".join(f"{P.KINDS.get(b.kind, '•')} {b.time_label} {b.title}"
@@ -2511,6 +2880,6 @@ def page_review() -> None:
         lambda s: save_review(s, day, val("rv_note", "")), "Review saved"))
 
 
-{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Deals": page_deals, "University": page_university, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
+{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Deals": page_deals, "University": page_university, "Jobs": page_jobs, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
  "Review": page_review}[page]()
 s.close()

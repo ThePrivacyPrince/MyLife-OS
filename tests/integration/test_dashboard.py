@@ -5,7 +5,7 @@ from streamlit.testing.v1 import AppTest
 from lifeos.config import REPO_ROOT
 
 APP = str(REPO_ROOT / "lifeos" / "dashboard" / "app.py")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Jobs", "Add", "Recurring", "All tasks", "Review"]
 
 
 @pytest.fixture
@@ -282,7 +282,7 @@ def test_int21_deals_views_and_add_listing(seeded_db, view):
 
 
 
-@pytest.mark.parametrize("view", ["This semester", "Review", "Catalog", "Library", "History", "Exams", "Hands-on",
+@pytest.mark.parametrize("view", ["This semester", "Review", "Notes", "Catalog", "Library", "History", "Exams", "Hands-on",
                                   "Report card"])
 def test_int22_university_views(seeded_db, view):
     at = AppTest.from_file(APP, default_timeout=30)
@@ -303,4 +303,46 @@ def test_int23_start_unit_then_review_a_card(seeded_db):
     at.run()
     [b for b in at.button if b.label == "Show answer"][0].click().run()
     [b for b in at.button if b.label == "✅ Knew it"][0].click().run()
+    assert not at.exception
+
+
+def test_int24_write_a_daily_study_note(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("University").run()
+    at.session_state["uni_view"] = "Notes"
+    at.run()
+    at.text_area(key="nt_body").set_value("Order of precedence decides MSA vs order form conflicts #contracts")
+    at.selectbox(key="nt_course").set_value("LOPS201").run()
+    at.selectbox(key="nt_unit").set_value("LOPS201-U1")
+    [b for b in at.button if b.label == "Save note"][0].click().run()
+    assert any("Note saved" in x.value for x in at.success), [e.value for e in at.error]
+    assert not at.exception
+    assert any("Order of precedence" in m.value for m in at.markdown)
+
+
+def test_int25_job_prep_role_to_strategy_requirements_and_task(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Jobs").run()
+    assert not at.exception, at.exception
+    at.text_input(key="jr_company").set_value("Acme")
+    at.text_input(key="jr_title").set_value("Legal Operations Assistant")
+    at.text_area(key="jr_posting").set_value("- Review NDAs, MSAs and DPAs for attorney review\n- Manage Ironclad workflows")
+    at.multiselect(key="jr_courses").set_value(["LOPS201"])
+    [b for b in at.button if b.label == "Create role"][0].click().run()
+    assert any("Role created" in x.value for x in at.success), [e.value for e in at.error]
+    assert not at.exception, at.exception
+    rid = at.session_state["job_sel"]
+    at.text_area(key=f"js{rid}pitch").set_value("GRC analyst who already reviews vendor MSAs and DPAs")
+    [b for b in at.button if b.label == "Save strategy"][0].click().run()
+    assert any("Strategy saved" in x.value for x in at.success)
+    at.text_input(key=f"jt{rid}").set_value("Timed NDA redline")
+    [b for b in at.button if b.label == "Add task"][0].click().run()
+    assert any("Prep task added" in x.value for x in at.success), [e.value for e in at.error]
+    for v in ["Story bank", "Roles"]:
+        at.session_state["job_view"] = v
+        at.run()
+        assert not at.exception, at.exception
+    at.sidebar.radio[0].set_value("Today").run()
     assert not at.exception

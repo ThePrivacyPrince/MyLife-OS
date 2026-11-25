@@ -606,3 +606,104 @@ class HandsOnRun(Base):
     day: Mapped[dt.date] = mapped_column(Date)
     steps_done: Mapped[list] = mapped_column(JSON, default=list)
     evidence: Mapped[str] = mapped_column(Text, default="")
+
+
+# ---------------------------------------------------------------- notes (University + job prep)
+class Note(Base):
+    """A dated note. It can be tied to a course, a unit and/or a job role, so one note shows up in every place
+    it's relevant (the unit's Notes tab, the University journal, the role's prep page)."""
+
+    __tablename__ = "notes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day: Mapped[dt.date] = mapped_column(Date)
+    kind: Mapped[str] = mapped_column(String(12), default="study")  # study | job
+    title: Mapped[str] = mapped_column(String(200), default="")
+    body: Mapped[str] = mapped_column(Text)
+    course_code: Mapped[str | None] = mapped_column(String(20))
+    unit_key: Mapped[str | None] = mapped_column(String(40))
+    role_id: Mapped[int | None] = mapped_column(ForeignKey("job_roles.id"))
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ---------------------------------------------------------------- job prep
+class JobRole(Base):
+    """A role you're preparing for. The strategy is a set of named sections (see services/jobs.STRATEGY)."""
+
+    __tablename__ = "job_roles"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company: Mapped[str] = mapped_column(String(120))
+    title: Mapped[str] = mapped_column(String(160))
+    url: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(16), default="researching")
+    status_reason: Mapped[str | None] = mapped_column(Text)
+    posting: Mapped[str] = mapped_column(Text, default="")
+    strategy: Mapped[dict] = mapped_column(JSON, default=dict)
+    applied_on: Mapped[dt.date | None] = mapped_column(Date)
+    next_step: Mapped[str] = mapped_column(String(200), default="")
+    next_step_date: Mapped[dt.date | None] = mapped_column(Date)
+    created_on: Mapped[dt.date] = mapped_column(Date)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    requirements: Mapped[list["RoleRequirement"]] = relationship(
+        back_populates="role", order_by="RoleRequirement.position", cascade="all, delete-orphan")
+    links: Mapped[list["RoleLink"]] = relationship(back_populates="role", order_by="RoleLink.id",
+                                                   cascade="all, delete-orphan")
+    events: Mapped[list["RoleEvent"]] = relationship(back_populates="role", order_by="RoleEvent.id")
+
+
+class RoleRequirement(Base):
+    """One thing the employer wants, how strongly you can prove it, and the proof."""
+
+    __tablename__ = "job_requirements"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("job_roles.id"))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    text: Mapped[str] = mapped_column(String(300))
+    strength: Mapped[str] = mapped_column(String(10), default="unknown")  # strong | partial | gap | unknown
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    role: Mapped[JobRole] = relationship(back_populates="requirements")
+
+
+class RoleLink(Base):
+    """Ties a role to something else in LIFE OS: a course, unit, task, story or repo/portfolio piece."""
+
+    __tablename__ = "job_links"
+    __table_args__ = (UniqueConstraint("role_id", "kind", "ref"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("job_roles.id"))
+    kind: Mapped[str] = mapped_column(String(12))  # course | unit | task | story | repo
+    ref: Mapped[str] = mapped_column(String(300))
+    note: Mapped[str] = mapped_column(Text, default="")
+    role: Mapped[JobRole] = relationship(back_populates="links")
+
+
+class RoleEvent(Base):
+    """Append-only history of a role: created, status changes, applications, links."""
+
+    __tablename__ = "job_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("job_roles.id"))
+    event_type: Mapped[str] = mapped_column(String(32))
+    from_value: Mapped[str | None] = mapped_column(String(200))
+    to_value: Mapped[str | None] = mapped_column(String(300))
+    reason: Mapped[str | None] = mapped_column(Text)
+    at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    role: Mapped[JobRole] = relationship(back_populates="events")
+
+
+class Story(Base):
+    """A reusable interview story (STAR). One story can serve many roles."""
+
+    __tablename__ = "job_stories"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    situation: Mapped[str] = mapped_column(Text, default="")
+    task: Mapped[str] = mapped_column(Text, default="")
+    action: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[str] = mapped_column(Text, default="")
+    skills: Mapped[list] = mapped_column(JSON, default=list)
+    created_on: Mapped[dt.date] = mapped_column(Date)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
