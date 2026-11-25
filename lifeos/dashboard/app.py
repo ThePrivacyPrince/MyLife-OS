@@ -1187,7 +1187,7 @@ def page_university() -> None:
         c[0].metric(sem["code"], f"{max(0, (sem['end'] - day).days) // 7} wks left" if started else
                     f"starts {sem['start']:%b} {sem['start'].day}")
     c[1].metric("Cards due today", due_today)
-    s1 = UNI.courses(semester=sem["code"]) if sem else []
+    s1 = UNI.active_courses(day)
     reports = [UNI.course_report(s, co["code"], day) for co in s1]
     total_units = sum(len(r.levels) for r in reports)
     c[2].metric("Units applied", f"{sum(r.applied for r in reports)}/{total_units}" if total_units else "-")
@@ -1197,16 +1197,23 @@ def page_university() -> None:
                                          "Hands-on", "Report card"], key="uni_view", label_visibility="collapsed") \
         or "This semester"
     if view == "This semester":
-        if not sem:
+        if not s1:
             st.caption("No semester planned.")
             return
-        st.caption(f"**{sem['name']}** · {sem['start']:%b %d} – {sem['end']:%b %d, %Y} · about {sem['weekly_hours']} "
-                   f"hrs/week + {sem['daily_review_minutes']} min of cards a day. Rule of One: a hard skill, a human "
-                   "skill, an anchor.")
+        if sem:
+            st.caption(f"**{sem['name']}** · {sem['start']:%b %d} – {sem['end']:%b %d, %Y} · about {sem['weekly_hours']} "
+                       f"hrs/week + {sem['daily_review_minutes']} min of cards a day. Rule of One: a hard skill, a human "
+                       "skill, an anchor. Career sprints run alongside, for a set number of weeks.")
         for co, rep in zip(s1, reports):
             dept = next(d for d in UNI.departments() if d["code"] == co["dept"])
             with st.container(border=True):
                 st.markdown(f"### {dept['icon']} {co['code']} · {co['title']}")
+                if co.get("sprint"):
+                    sp = co["sprint"]
+                    st.markdown(f":orange-badge[🏁 Career sprint · {sp['start']:%b} {sp['start'].day} – "
+                                f"{sp['end']:%b} {sp['end'].day}"
+                                + (f" · {max(0, (sp['end'] - day).days)} days left]" if sp["start"] <= day else
+                                   f" · starts in {(sp['start'] - day).days} days]"))
                 st.caption(f"{co['role']} · {co['kind']} · ~{co['hours']} h/week · {co['outcome']}")
                 st.markdown(" ".join(f"{LRN.LEVEL_ICON[lv]}" for lv in rep.levels.values()) +
                             f" :gray[· applied {rep.applied}/{len(rep.levels)} · mastered {rep.mastered}]")
@@ -1214,7 +1221,7 @@ def page_university() -> None:
                            "🏅 mastered (applied + reviews 3+ weeks apart)")
                 for u in UNI.units(co["code"]):
                     lv = rep.levels[u["key"]]
-                    with st.expander(f"{LRN.LEVEL_ICON[lv]} Weeks {u['weeks']} · {u['title']} · {LEVEL_TEXT[lv]}"):
+                    with st.expander(f"{LRN.LEVEL_ICON[lv]} Week{'s' if '-' in str(u['weeks']) else ''} {u['weeks']} · {u['title']} · {LEVEL_TEXT[lv]}"):
                         unit_panel(u, checked)
     elif view == "Review":
         review_session()
@@ -1224,7 +1231,9 @@ def page_university() -> None:
             with st.expander(f"{d['icon']} {d['name']} · {len(cs)} course(s)"):
                 st.caption(d["outcome"])
                 for co in cs:
-                    when = f"semester {co['semester']}" if co.get("semester") else "not scheduled yet"
+                    when = (f"semester {co['semester']}" if co.get("semester") else
+                            f"career sprint {co['sprint']['start']:%b} {co['sprint']['start'].day} – "
+                            f"{co['sprint']['end']:%b} {co['sprint']['end'].day}" if co.get("sprint") else "not scheduled yet")
                     st.markdown(f"**{co['code']} · {co['title']}** :gray[· {co['kind']} · {when}]  \n{co['outcome']}")
                 if d["code"] == "HIS":
                     st.caption("History has no limit - open inquiries anytime under **History**.")

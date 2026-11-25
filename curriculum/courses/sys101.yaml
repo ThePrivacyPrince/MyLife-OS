@@ -1,9 +1,10 @@
 course: SYS101
+# Starts in week 5 of Semester 1 (Jan 4) to make room for the LOPS201 career sprint.
 units:
   - key: SYS101-U1
     title: "Python for operators: data in, answers out"
     mode: studio
-    weeks: "1-3"
+    weeks: "5-6"
     objectives:
       - Read a CSV file and summarize it in Python
       - Write a function and a test for it
@@ -27,7 +28,7 @@ units:
   - key: SYS101-U2
     title: "APIs and JSON: get data from the world"
     mode: studio
-    weeks: "4-6"
+    weeks: "7-8"
     objectives:
       - Explain HTTP requests, responses and status codes
       - Call a public API and parse JSON
@@ -56,7 +57,7 @@ units:
   - key: SYS101-U3
     title: "Controls as code: OPA and Rego"
     mode: studio
-    weeks: "7-9"
+    weeks: "9-10"
     objectives:
       - Write a Rego policy that denies an unsafe action
       - Test the policy with opa test
@@ -83,7 +84,7 @@ units:
   - key: SYS101-U4
     title: "Infrastructure as code: Terraform with a policy check"
     mode: studio
-    weeks: "10-12"
+    weeks: "11-12"
     objectives:
       - Run terraform init, plan and apply
       - Explain state, providers and drift

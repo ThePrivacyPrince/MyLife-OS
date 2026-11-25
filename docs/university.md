@@ -25,7 +25,27 @@ Each semester has a hard skill, a human skill and an anchor. That's about 4 hour
 |---|---|---|---|
 | OWN101 Ownership & Capital | hard | studio | cash flow · debt · credit · taxes · unit economics · investing |
 | NEG101 Negotiation Lab | human | studio | preparation · anchors · tactical empathy · concessions (reps through evening-check asks and Deals) |
-| SYS101 Systems Engineering for Operators | anchor | studio | Python · APIs · OPA/Rego · Terraform + policy, each mapped to an ISO 27001 / SOC 2 control |
+| SYS101 Systems Engineering for Operators | anchor | studio | Python · APIs · OPA/Rego · Terraform + policy, each mapped to an ISO 27001 / SOC 2 control. Starts in week 5 (Jan 4), after the LOPS201 sprint. |
+
+## Career sprints
+A career sprint is a short, time-boxed course tied to a real opportunity. It runs beside the semester, outside the
+Rule of One, and shows at the top of **This semester** until it ends.
+
+**LOPS201 Legal Operations & Commercial Contracts** (⚖️ Law & Argument), Nov 30 – Dec 27, 2026, about 3.5 hrs/week.
+It's built for legal-ops roles: contract intake, redlines for attorney review, CLM workflows such as Ironclad.
+
+| Week | Unit | Portfolio piece |
+|---|---|---|
+| 1 | Commercial contract basics: MSA, order forms, SOWs, core clauses | Clause cheat sheet |
+| 1-2 | Contract families: NDAs, cloud/SaaS, vendor agreements | Common Paper vs Bonterms NDA comparison |
+| 2-3 | Privacy and data terms: DPAs, GDPR Art. 28, SCCs, SOC 2 / ISO evidence | DPA checklist mapped to Art. 28 and SOC 2 |
+| 3 | Redlines, playbooks, issues memos (timed 45-minute NDA redline) | NDA redline + memo, MSA playbook |
+| 4 | Legal ops: intake, approval matrix, ESIGN/UETA, repository, renewals | Intake-to-signature workflow |
+| 4 | Automation and AI with guardrails | Contract-data extraction script + AI-use checklist |
+
+The translation memo (one risk written for Sales and for the Head of Legal) is a standing assignment. Use public
+templates only, never a real company's contract. Sources include Stark, Adams and Garner; Common Paper and Bonterms;
+GDPR and the EU SCCs on EUR-Lex; the ICO; the CPPA; ESIGN and UETA; CLOC; Ironclad; NIST AI RMF; and ABA Formal Opinion 512.
 
 ## Every unit: Learn → Recall → Test → Apply → Cards
 - **📖 Learn:** objectives, a short orientation, and research papers, books, courses and official guides.
@@ -52,4 +72,4 @@ Each semester has a hard skill, a human skill and an anchor. That's about 4 hour
 - **Report card:** applied and mastered units, quiz accuracy, and 30-day card recall per course.
 
 Later: the AI faculty (dean, examiner, librarian) comes with Milestone 4. Everything here works without AI.
-Tests: `tests/unit/test_university.py` (UNI-01..11), `test_int22`, `test_int23`.
+Tests: `tests/unit/test_university.py` (UNI-01..12), `test_int22`, `test_int23`.

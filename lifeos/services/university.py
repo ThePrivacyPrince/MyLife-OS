@@ -95,6 +95,18 @@ def current_semester(today: dt.date) -> dict | None:
     return upcoming[0] if upcoming else None
 
 
+def sprints(today: dt.date) -> list[dict]:
+    """Career sprints that haven't ended yet (running or upcoming), soonest first."""
+    out = [c for c in content()["catalog"]["courses"] if c.get("sprint") and c["sprint"]["end"] >= today]
+    return sorted(out, key=lambda c: c["sprint"]["start"])
+
+
+def active_courses(today: dt.date) -> list[dict]:
+    """What you're studying now: open career sprints first, then the current (or next) semester's courses."""
+    sem = current_semester(today)
+    return sprints(today) + (courses(semester=sem["code"]) if sem else [])
+
+
 def exams() -> list[dict]:
     return content()["catalog"]["exams"]
 

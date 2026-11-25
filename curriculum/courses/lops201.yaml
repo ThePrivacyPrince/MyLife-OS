@@ -1,0 +1,301 @@
+# LOPS201 Legal Operations & Commercial Contracts - a 4-week career sprint (Nov 30 - Dec 27, 2026).
+# Built for legal-ops roles (contract intake, redlines for attorney review, CLM workflows like Ironclad).
+# Every unit ends in a portfolio piece. Use public templates only - never a real company's or employer's contract.
+course: LOPS201
+units:
+  - key: LOPS201-U1
+    title: "Commercial contract basics: how an MSA, order forms and SOWs fit together"
+    mode: studio
+    weeks: "1"
+    objectives:
+      - Explain formation (offer, acceptance, consideration) and what counts as breach
+      - Map a contract stack - MSA, order forms, SOWs, exhibits - and find which document wins in a conflict
+      - Explain the core clauses in plain English and what each one protects
+    sources: [stark_dc, schwartz_scott2003, ucc2, commonpaper]
+    learn: >-
+      Most B2B deals are a stack: a Master Services Agreement with the long-lived legal terms, then order forms or
+      statements of work for each purchase (price, quantity, term, scope). The order-of-precedence clause decides which
+      document wins when they conflict - read it first. Stark's key insight is that every clause is one of a few building
+      blocks: representations (facts true today), covenants (promises to act), conditions (what must happen first),
+      discretionary authority and declarations. Between sophisticated businesses, courts largely enforce what's written
+      (Schwartz & Scott), so the money lives in a handful of clauses: term and termination, fees and payment, warranties,
+      limitation of liability, indemnification, confidentiality, IP ownership, assignment, governing law, notices.
+    key_points:
+      - The MSA holds the legal terms; order forms and SOWs hold the deal terms for each purchase
+      - Read the order-of-precedence clause first when documents conflict
+      - Stark's building blocks - representations, covenants, conditions, discretionary authority, declarations
+      - Limitation of liability and indemnification decide who pays when things go wrong
+      - Between businesses, the written words carry the risk
+    apply: >-
+      Download Common Paper's Cloud Service Agreement. Build a one-page clause cheat sheet: for each core clause, what it
+      says, who it protects, and the question you'd flag for an attorney.
+    deliverable: "Portfolio piece 0: a one-page clause cheat sheet in your own words (a public template, never a real deal)."
+    quiz:
+      - q: "An order form says the customer can terminate for convenience; the MSA says it can't. Where do you look first?"
+        choices: ["Whichever was signed last", "The order-of-precedence clause", "The governing-law clause", "Ask Sales"]
+        answer: 1
+        why: "The precedence clause sets which document controls - and some MSAs let an order form override only if it says so expressly."
+      - q: "'Vendor shall deliver the reports within 10 days' is a…"
+        choices: ["representation", "covenant", "condition", "declaration"]
+        answer: 1
+        why: "A covenant is a promise to do (or not do) something in the future. Breaking it is a breach."
+      - q: "'Vendor is not a party to any litigation' is a…"
+        choices: ["representation", "covenant", "condition", "discretionary authority"]
+        answer: 0
+        why: "A representation states a fact as true today. If it's false, the remedy is usually misrepresentation or breach of warranty."
+      - q: "In two sentences, explain to a sales rep why the limitation-of-liability clause matters."
+        type: short
+        key_points: ["caps how much either side can be made to pay", "the cap and its carve-outs decide real exposure",
+                     "usually tied to fees paid, e.g. 12 months"]
+
+  - key: LOPS201-U2
+    title: "Contract families: NDAs, cloud/SaaS terms, order forms and vendor agreements"
+    mode: studio
+    weeks: "1-2"
+    objectives:
+      - Triage an NDA - mutual vs one-way, definition of confidential, exclusions, term, residuals
+      - Spot the terms that differ between a customer-side and a vendor-side cloud agreement
+      - Compare two standard templates and explain why they differ
+    sources: [commonpaper, bonterms, choi_gulati2006, kahan_klausner1997, adams_msd]
+    learn: >-
+      Legal ops sees the same families again and again. NDAs: mutual or one-way; what counts as confidential; the standard
+      exclusions (already known, independently developed, public, received from a third party); how long the duty lasts;
+      and whether a 'residuals' clause lets the other side use what stays in their memory. Cloud/SaaS agreements turn on
+      service levels, data use, security, suspension rights, auto-renewal and price increases. When your company is the
+      buyer, the same clauses flip - you want strong warranties and a higher liability cap. Standard templates exist
+      because shared terms cut negotiating time (Kahan & Klausner), but old clauses get copied long after they stop
+      making sense (Choi & Gulati) - read the template, don't trust it.
+    key_points:
+      - NDA checklist - mutual or one-way, definition, exclusions, term, return or destruction, residuals
+      - Standard exclusions - already known, independently developed, public, from a third party
+      - Cloud terms to watch - SLA, data use, suspension, auto-renewal, price increases
+      - Buyer-side and seller-side want opposite things from the same clause
+      - Templates save time, but copied clauses can be stale
+    apply: >-
+      Read the Common Paper and Bonterms mutual NDAs side by side. Build a comparison table (definition, exclusions,
+      term, residuals, remedies, governing law) and write which you'd prefer as the buyer, and why.
+    deliverable: "Portfolio piece 1a: a two-template NDA comparison table with your buyer-side recommendation."
+    quiz:
+      - q: "Which is a standard exclusion from 'Confidential Information' in an NDA?"
+        choices: ["Information marked 'internal'", "Information the recipient independently developed without using it",
+                  "Pricing information", "Anything shared orally"]
+        answer: 1
+        why: "Independent development, prior knowledge, public information and third-party receipt are the classic exclusions."
+      - q: "A 'residuals' clause lets the recipient…"
+        choices: ["keep copies after termination", "use general ideas retained in unaided memory",
+                  "share with affiliates", "ignore the term limit"]
+        answer: 1
+        why: "Residuals clauses permit use of what people remember without notes - a big give for the discloser. Flag it."
+      - q: "Your company is buying a SaaS tool. Which change helps your company most?"
+        choices: ["Lower the vendor's liability cap", "Add vendor suspension rights",
+                  "Require notice before auto-renewal and cap price increases", "Remove the SLA"]
+        answer: 2
+        why: "As the buyer, you want warning before renewal and protection from surprise price increases."
+
+  - key: LOPS201-U3
+    title: "Privacy and data terms: DPAs, sub-processors, SCCs and security evidence"
+    mode: studio
+    weeks: "2-3"
+    objectives:
+      - Check a DPA against what GDPR Article 28(3) requires a processor contract to say
+      - Explain controller vs processor, sub-processors and when the SCCs apply
+      - Tie a DPA's security exhibit to evidence - a SOC 2 Type II report or an ISO 27001 certificate
+    sources: [gdpr, eu_sccs, ico_contracts, cppa, solove_hartzog2014, aicpa_tsc, iso27001]
+    learn: >-
+      A Data Processing Agreement is where privacy law meets the contract. Under GDPR, when a vendor (processor)
+      handles personal data for your company (controller), Article 28(3) says the contract must cover: processing only on
+      documented instructions; confidentiality of staff; security measures (Article 32); rules for sub-processors; help
+      with data-subject requests and with security, breach and impact-assessment duties; deleting or returning data at
+      the end; and making information available, including audits. Transfers outside the EU usually rely on the Standard
+      Contractual Clauses (2021/914), which come in four modules by relationship. US state laws such as California's add
+      'service provider' terms - no selling or sharing the data, no using it outside the contract. This is your edge:
+      'appropriate security measures' are proven with evidence, so check the SOC 2 Type II period, its exceptions, and
+      the certificate's scope.
+    key_points:
+      - Controller decides why and how; processor acts on the controller's instructions
+      - Article 28(3) - instructions, confidentiality, security, sub-processors, assistance, deletion or return, audits
+      - Sub-processors need authorisation - specific or general with notice and a chance to object
+      - SCCs have four modules - C2C, C2P, P2P, P2C
+      - SOC 2 Type II covers a period; read the exceptions and check the scope matches the service you're buying
+    apply: >-
+      Build a DPA review checklist: one row per Article 28(3) requirement, where it appears in Common Paper's DPA, and
+      what evidence you'd ask the vendor for (SOC 2 Type II section, ISO certificate scope, sub-processor list).
+    deliverable: "Portfolio piece 3: a DPA checklist mapped to GDPR Art. 28(3) and to SOC 2 / ISO evidence."
+    quiz:
+      - q: "Your company uses a payroll vendor to process employee data on your instructions. The vendor is the…"
+        choices: ["controller", "processor", "joint controller", "data subject"]
+        answer: 1
+        why: "It processes personal data on behalf of, and on the instructions of, the controller (your company)."
+      - q: "A vendor sends a SOC 2 Type I report. What's the gap?"
+        choices: ["None - Type I is the stronger report", "Type I tests design at a point in time, not operating effectiveness over a period",
+                  "Type I only covers privacy", "Type I is not issued by an auditor"]
+        answer: 1
+        why: "Type II tests whether controls operated over a period (often 6-12 months). Ask for Type II or a roadmap to it."
+      - q: "Which is NOT one of the Article 28(3) required contract terms?"
+        choices: ["Processing only on documented instructions", "Deleting or returning data at the end",
+                  "A minimum liability cap of 12 months' fees", "Allowing and contributing to audits"]
+        answer: 2
+        why: "Article 28 sets data-protection terms, not liability caps. Liability is negotiated in the MSA."
+      - q: "A vendor wants to add a new sub-processor. What should the DPA give your company?"
+        type: short
+        key_points: ["advance notice", "a right to object", "the sub-processor bound by the same data-protection terms"]
+
+  - key: LOPS201-U4
+    title: "Redlines, playbooks and writing for the attorney"
+    mode: studio
+    weeks: "3"
+    objectives:
+      - Write a playbook - preferred, fallback and walk-away positions for each key clause
+      - Redline cleanly with track changes and comments that explain why
+      - Summarize open issues in a one-page memo an attorney can decide from in five minutes
+    sources: [garner_lwple, adams_msd, stark_dc, kahan_klausner1997]
+    learn: >-
+      A playbook is your company's negotiation plan for its paper: for each clause, the preferred position, acceptable
+      fallbacks, and the walk-away that must go to an attorney - the same structure as your Deals offer tool. In a
+      legal-ops role you prepare, you don't decide: redline to the playbook, explain each change in a short comment
+      ('Cap raised to 12 months' fees per playbook §4'), and escalate anything outside it. Edit clearly: change only what
+      you must, don't rewrite for style, and keep a clean record of versions. The issues memo is plain English (Garner):
+      the deal, the open issues ranked by risk, your recommendation, and what you need decided.
+    key_points:
+      - Playbook - preferred, fallback, walk-away; anything past walk-away escalates
+      - Prepare for the attorney, don't decide for them
+      - Every redline gets a one-line 'why' comment
+      - Change what matters, not style; keep versions clean
+      - Issues memo - deal, ranked issues, recommendation, decision needed
+    apply: >-
+      Write a one-page MSA playbook (liability cap, indemnity, payment terms, auto-renewal, governing law, data use). Then
+      redline a public NDA template against a buyer playbook with comments, and write a one-page issues memo. Do the NDA
+      redline timed - 45 minutes - because interviews often include one.
+    deliverable: "Portfolio pieces 1b and 2: an NDA redline with comments plus an issues memo, and an MSA playbook."
+    quiz:
+      - q: "A counterparty asks for a liability cap of 3 months' fees. Your playbook says preferred 12 months, fallback 6, walk-away below 6. You…"
+        choices: ["Accept - it's close", "Counter at 12 months and flag the request in the memo",
+                  "Approve 3 months yourself", "Delete the clause"]
+        answer: 1
+        why: "Counter at preferred, and anything below the walk-away goes to the attorney - you don't approve it yourself."
+      - q: "Which redline comment is most useful to the attorney?"
+        choices: ["'Changed.'", "'See edits.'", "'Narrowed residuals - lets them use our info from memory; playbook §2 says delete.'",
+                  "'Not sure about this.'"]
+        answer: 2
+        why: "It says what changed, the risk and the authority for it - the attorney can approve in seconds."
+      - q: "What four things belong in a one-page issues memo?"
+        type: short
+        key_points: ["the deal in a sentence", "open issues ranked by risk", "your recommendation", "the decision needed"]
+
+  - key: LOPS201-U5
+    title: "Legal ops and contract management: intake to signature to renewal"
+    mode: studio
+    weeks: "4"
+    objectives:
+      - Design an intake-to-signature workflow with an approval matrix
+      - Explain why e-signatures are binding (ESIGN and UETA) and the main exceptions
+      - Define the repository metadata and metrics a legal team should track
+    sources: [cloc, ironclad, esign_act, ueta, benshahar_schneider]
+    learn: >-
+      Legal operations runs legal like a business (CLOC). The contract lifecycle is: intake (a request form with the
+      facts legal needs), triage (standard paper or negotiated?), drafting or review, approvals, signature, storage, then
+      obligations and renewals. An approval matrix says who must approve what - e.g. Finance above a dollar amount,
+      Security if customer data is involved, an attorney for anything off-playbook. Tools like Ironclad turn this into
+      workflows: launch forms, conditional approvals, e-signature and a searchable repository. E-signatures are as valid
+      as ink under the federal ESIGN Act and state UETA, with exceptions such as wills. Track what makes the team better:
+      cycle time, volume by type, where deals stall, renewal dates and notice deadlines.
+    key_points:
+      - Lifecycle - intake, triage, review, approval, signature, repository, obligations, renewal
+      - An approval matrix ties approvers to dollar amounts, data and deviations from the playbook
+      - ESIGN and UETA make e-signatures binding, with exceptions such as wills
+      - Repository metadata - parties, type, dates, value, renewal and notice dates, owner
+      - Metrics - cycle time, volume, bottlenecks, missed renewals
+    apply: >-
+      Draw an intake-to-signature workflow for a new SaaS vendor: intake fields, triage rules, an approval matrix (Finance,
+      Security, Legal), signature, and the repository fields to capture. Note where you'd use Ironclad features.
+    deliverable: "Portfolio piece 4a: a workflow diagram with intake fields, an approval matrix and repository metadata."
+    quiz:
+      - q: "A vendor contract auto-renews for 12 months unless notice is given 60 days before the end date. Which field prevents a surprise renewal?"
+        choices: ["Effective date", "Notice deadline (end date minus 60 days) with an owner and reminder", "Governing law", "Signature date"]
+        answer: 1
+        why: "Track the notice date, not just the end date - by the end date it's too late."
+      - q: "Which document is a well-known exception where ESIGN does not make an electronic signature enough?"
+        choices: ["A SaaS order form", "An NDA", "A will", "A DPA"]
+        answer: 2
+        why: "ESIGN excludes wills, codicils and testamentary trusts, among a few others."
+      - q: "Cycle time is…"
+        choices: ["the contract term", "the time from intake request to signature", "the renewal period", "the time to pay an invoice"]
+        answer: 1
+        why: "It's the core legal-ops speed metric - and where bottlenecks show up."
+
+  - key: LOPS201-U6
+    title: "Automation and AI with guardrails"
+    mode: studio
+    weeks: "4"
+    objectives:
+      - Automate one repetitive contract task end to end
+      - Use AI for a first pass with a verification checklist, never as the final word
+      - Apply the confidentiality rule - no client or company contract in an unapproved AI tool
+    sources: [nist_ai_rmf, aba_op512, ironclad, benshahar_schneider]
+    learn: >-
+      The best legal-ops people remove manual steps: a form that fills a tracker, reminders that fire from renewal dates,
+      a script that pulls parties and dates into a sheet. AI can speed up a first pass - summarizing, spotting
+      missing clauses, comparing to a playbook - but it can be confidently wrong, and pasting a contract into an
+      unapproved tool can breach confidentiality. ABA Formal Opinion 512 frames the duties (competence, confidentiality,
+      supervision, communication); NIST's AI RMF gives a way to map, measure and manage the risk. Your rule: approved tool,
+      sample or redacted data, a checklist to verify every output, and a human signs off.
+    key_points:
+      - Automate the boring, repeatable steps first - intake, trackers, reminders
+      - AI output is a draft - verify every clause reference and number
+      - Never paste confidential contracts into an unapproved tool
+      - ABA Op. 512 - competence, confidentiality, supervision, communication
+      - A human approves anything that leaves the team
+    apply: >-
+      Write a small Python script that reads sample (public-template) contracts and extracts parties, effective date,
+      term, renewal and notice period into a CSV tracker. Add a one-page AI-use checklist for first-pass review.
+    deliverable: "Portfolio piece 4b: the extraction script running on sample contracts, plus your AI-use checklist."
+    quiz:
+      - q: "A sales rep pastes a customer's draft MSA into a free public chatbot for a summary. The main problem is…"
+        choices: ["The summary might be long", "Confidentiality - the contract may be disclosed or retained outside approved controls",
+                  "Chatbots can't read contracts", "Nothing, it's faster"]
+        answer: 1
+        why: "Confidential information goes only into tools the company has approved for it."
+      - q: "What makes an AI first-pass review safe enough to use?"
+        type: short
+        key_points: ["an approved tool", "verify every output against the contract", "a human approves the result",
+                     "no confidential data in unapproved tools"]
+
+  # Translation memo (portfolio piece 5) is a standing assignment across the sprint: pick one risk from your NDA or MSA
+  # work and write it twice - five sentences for a sales rep, one paragraph for the Head of Legal. See TRN201.
+
+cards:
+  - {unit: LOPS201-U1, kind: acronym, term: "MSA", definition: "Master Services Agreement - the long-lived legal terms; individual purchases are added by order form or SOW."}
+  - {unit: LOPS201-U1, kind: acronym, term: "SOW", definition: "Statement of Work - the scope, deliverables, timeline and fees for one engagement under an MSA."}
+  - {unit: LOPS201-U1, kind: definition, term: "Order form", definition: "The document for a specific purchase under an MSA: products, quantities, price, term."}
+  - {unit: LOPS201-U1, kind: definition, term: "Order of precedence", definition: "The clause that decides which document controls when the MSA, order forms and exhibits conflict."}
+  - {unit: LOPS201-U1, kind: definition, term: "Limitation of liability", definition: "Caps how much each side can owe (often tied to fees paid) and usually excludes indirect damages; read the carve-outs."}
+  - {unit: LOPS201-U1, kind: definition, term: "Consequential damages", definition: "Indirect losses, such as lost profits, that flow from a breach; commonly excluded in B2B contracts."}
+  - {unit: LOPS201-U1, kind: definition, term: "Indemnification", definition: "A promise to defend and pay for specified third-party claims, e.g. IP infringement by the vendor's product."}
+  - {unit: LOPS201-U1, kind: definition, term: "Representation vs covenant", definition: "A representation states a fact true now; a covenant is a promise to act (or not) in the future."}
+  - {unit: LOPS201-U1, kind: definition, term: "Survival clause", definition: "Lists the obligations that continue after the contract ends, such as confidentiality and payment."}
+  - {unit: LOPS201-U2, kind: acronym, term: "NDA", definition: "Non-Disclosure Agreement - protects confidential information shared in a deal or evaluation."}
+  - {unit: LOPS201-U2, kind: definition, term: "Mutual vs one-way NDA", definition: "Mutual protects both sides' information; one-way protects only the discloser's."}
+  - {unit: LOPS201-U2, kind: definition, term: "Residuals clause", definition: "Lets the recipient use information retained in unaided memory - a significant concession by the discloser."}
+  - {unit: LOPS201-U2, kind: acronym, term: "SLA", definition: "Service Level Agreement - measurable commitments (e.g. uptime) and the credits owed if they're missed."}
+  - {unit: LOPS201-U2, kind: definition, term: "Auto-renewal", definition: "The contract renews automatically unless notice is given by a deadline."}
+  - {unit: LOPS201-U2, kind: definition, term: "Assignment / change of control", definition: "Whether a party can transfer the contract, including through a merger or sale."}
+  - {unit: LOPS201-U2, kind: definition, term: "Force majeure", definition: "Excuses performance during events beyond a party's control, as defined in the clause."}
+  - {unit: LOPS201-U3, kind: acronym, term: "DPA", definition: "Data Processing Agreement - the contract terms that govern a processor's handling of personal data."}
+  - {unit: LOPS201-U3, kind: definition, term: "Controller vs processor", definition: "The controller decides why and how personal data is processed; the processor acts on its instructions."}
+  - {unit: LOPS201-U3, kind: definition, term: "Sub-processor", definition: "A vendor's own vendor that processes the personal data; needs authorisation and the same protections."}
+  - {unit: LOPS201-U3, kind: acronym, term: "SCCs", definition: "Standard Contractual Clauses - EU Commission-approved terms for transferring personal data outside the EU (2021/914)."}
+  - {unit: LOPS201-U3, kind: acronym, term: "GDPR Art. 28", definition: "The GDPR article setting what a controller-processor contract must contain."}
+  - {unit: LOPS201-U3, kind: definition, term: "SOC 2 Type I vs Type II", definition: "Type I tests control design at a point in time; Type II tests operating effectiveness over a period."}
+  - {unit: LOPS201-U3, kind: definition, term: "Service provider (CCPA)", definition: "A vendor processing personal information for a business under a contract that limits its use - no selling or sharing."}
+  - {unit: LOPS201-U4, kind: definition, term: "Redline", definition: "A marked-up draft showing proposed changes (track changes), usually with comments explaining why."}
+  - {unit: LOPS201-U4, kind: definition, term: "Playbook", definition: "Pre-approved positions per clause - preferred, fallback and walk-away - with escalation rules."}
+  - {unit: LOPS201-U4, kind: definition, term: "Counterparty paper", definition: "When the contract draft comes from the other side, not your company's template - expect a longer review."}
+  - {unit: LOPS201-U5, kind: acronym, term: "CLM", definition: "Contract Lifecycle Management - software and process for intake, drafting, approval, signature, storage and renewal."}
+  - {unit: LOPS201-U5, kind: acronym, term: "CLOC", definition: "Corporate Legal Operations Consortium - the professional body for legal operations."}
+  - {unit: LOPS201-U5, kind: acronym, term: "ESIGN", definition: "Electronic Signatures in Global and National Commerce Act (2000) - federal law making e-signatures valid."}
+  - {unit: LOPS201-U5, kind: acronym, term: "UETA", definition: "Uniform Electronic Transactions Act - state law, adopted by most states, giving e-records and signatures legal effect."}
+  - {unit: LOPS201-U5, kind: definition, term: "Approval matrix", definition: "Who must approve which contracts - by value, data involved and deviation from the playbook."}
+  - {unit: LOPS201-U5, kind: definition, term: "Cycle time", definition: "Time from intake request to fully signed contract - the core legal-ops speed metric."}
+  - {unit: LOPS201-U5, kind: definition, term: "Notice deadline", definition: "The last day to give notice (e.g. of non-renewal); track it, not just the end date."}
+  - {unit: LOPS201-U6, kind: acronym, term: "AI RMF", definition: "NIST AI Risk Management Framework - Govern, Map, Measure, Manage."}
+  - {unit: LOPS201-U6, kind: definition, term: "ABA Formal Opinion 512", definition: "2024 ABA ethics guidance on lawyers' use of generative AI: competence, confidentiality, supervision, communication, fees."}

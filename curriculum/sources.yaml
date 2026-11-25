@@ -146,3 +146,55 @@ sources:
      url: "https://www.yamahawaverunners.com", why: "The authority on maintenance intervals and storage steps for your skis."}
   - {key: thisoldhouse, type: guide, level: intro, title: "This Old House - painting and repair how-tos",
      url: "https://www.thisoldhouse.com", why: "Long-running, trusted home improvement guidance."}
+  # ---------------- Legal Operations & Commercial Contracts (LOPS201)
+  - {key: stark_dc, type: book, level: core, authors: "Tina L. Stark", year: 2013,
+     title: "Drafting Contracts: How and Why Lawyers Do What They Do (2nd ed.)",
+     why: "The standard law-school drafting text: how business deals become representations, covenants, conditions and remedies."}
+  - {key: adams_msd, type: book, level: advanced, authors: "Kenneth A. Adams", year: 2023,
+     title: "A Manual of Style for Contract Drafting (5th ed.)",
+     why: "The reference for clear contract language - 'shall', 'efforts' standards, ambiguity. What careful redliners cite."}
+  - {key: garner_lwple, type: book, level: core, authors: "Bryan A. Garner", year: 2013,
+     title: "Legal Writing in Plain English (2nd ed.)", why: "Short, exercise-driven plain legal writing - for issues memos and comments."}
+  - {key: benshahar_schneider, type: book, level: advanced, authors: "Omri Ben-Shahar & Carl E. Schneider", year: 2014,
+     title: "More Than You Wanted to Know: The Failure of Mandated Disclosure",
+     why: "Why nobody reads boilerplate - and why summaries for Sales and Finance matter."}
+  - {key: choi_gulati2006, type: paper, level: research, authors: "Choi, S. J., & Gulati, G. M.", year: 2006,
+     title: "Contract as Statute", venue: "Michigan Law Review, 104(5)",
+     why: "Standard-form clauses get copied for decades, even when they stop making sense - read before trusting a template."}
+  - {key: kahan_klausner1997, type: paper, level: research, authors: "Kahan, M., & Klausner, M.", year: 1997,
+     title: "Standardization and Innovation in Corporate Contracting (or 'The Economics of Boilerplate')",
+     venue: "Virginia Law Review, 83(4)", why: "Why companies stick to standard terms: learning and network benefits - the case for playbooks."}
+  - {key: schwartz_scott2003, type: paper, level: research, authors: "Schwartz, A., & Scott, R. E.", year: 2003,
+     title: "Contract Theory and the Limits of Contract Law", venue: "Yale Law Journal, 113(3)",
+     why: "Between sophisticated businesses, courts enforce what's written - so the words in an MSA carry the risk."}
+  - {key: solove_hartzog2014, type: paper, level: research, authors: "Solove, D. J., & Hartzog, W.", year: 2014,
+     title: "The FTC and the New Common Law of Privacy", venue: "Columbia Law Review, 114(3)",
+     why: "How US privacy obligations really get set - by enforcement, not one statute. Context for vendor privacy terms."}
+  - {key: commonpaper, type: guide, level: core, title: "Common Paper - free standard agreements (NDA, Cloud Service Agreement, DPA)",
+     url: "https://commonpaper.com", why: "Committee-drafted, free contract standards with cover pages - real templates to read and redline."}
+  - {key: bonterms, type: guide, level: core, title: "Bonterms - free standard cloud terms, NDA and DPA",
+     url: "https://bonterms.com", why: "A second set of standard terms written by in-house lawyers - compare against Common Paper."}
+  - {key: gdpr, type: standard, level: advanced, title: "Regulation (EU) 2016/679 (GDPR) - see Article 28 (processor)",
+     url: "https://eur-lex.europa.eu/eli/reg/2016/679/oj", why: "The primary law every DPA is built on. Article 28(3) lists what the contract must say."}
+  - {key: eu_sccs, type: standard, level: advanced, title: "Commission Implementing Decision (EU) 2021/914 - Standard Contractual Clauses",
+     url: "https://eur-lex.europa.eu/eli/dec_impl/2021/914/oj", why: "The official SCCs for transferring personal data out of the EU, with their modules."}
+  - {key: ico_contracts, type: guide, level: core, title: "UK ICO - guidance for organisations (controllers and processors, contracts)",
+     url: "https://ico.org.uk", why: "A regulator's plain-English explanation of controller-processor contracts."}
+  - {key: cppa, type: guide, level: core, title: "California Privacy Protection Agency - CCPA regulations",
+     url: "https://cppa.ca.gov", why: "The US state rules behind 'service provider' contract terms."}
+  - {key: esign_act, type: standard, level: core, title: "ESIGN Act - 15 U.S.C. chapter 96 (Cornell LII)",
+     url: "https://www.law.cornell.edu/uscode/text/15/chapter-96", why: "Why an e-signature in Ironclad or DocuSign is as binding as ink, and its exceptions."}
+  - {key: ueta, type: standard, level: core, title: "Uniform Electronic Transactions Act (Uniform Law Commission)",
+     url: "https://www.uniformlaws.org", why: "The state-law companion to ESIGN, adopted by most states."}
+  - {key: ucc2, type: standard, level: core, title: "UCC Article 2 - Sales (Cornell LII)",
+     url: "https://www.law.cornell.edu/ucc/2", why: "Default rules for selling goods - useful contrast with services and software contracts."}
+  - {key: cloc, type: guide, level: core, title: "CLOC - Corporate Legal Operations Consortium",
+     url: "https://cloc.org", why: "The professional body for legal ops - its core competencies are the map of the job."}
+  - {key: ironclad, type: guide, level: intro, title: "Ironclad - product resources and help center",
+     url: "https://ironcladapp.com", why: "The tool in the job post: workflows, launch forms, approvals, signing, the repository."}
+  - {key: iapp_cipp, type: guide, level: core, title: "IAPP - CIPP/US certification",
+     url: "https://iapp.org", why: "The privacy credential that fits legal ops and your GRC path. Optional, later."}
+  - {key: nist_ai_rmf, type: standard, level: core, title: "NIST AI Risk Management Framework (AI RMF 1.0)",
+     url: "https://www.nist.gov/itl/ai-risk-management-framework", why: "A recognized framework for using AI with guardrails - map your review checklist to it."}
+  - {key: aba_op512, type: guide, level: core, title: "ABA Formal Opinion 512 (2024) - Generative Artificial Intelligence Tools",
+     why: "The ABA's ethics guidance on lawyers using AI: competence, confidentiality, supervision. Find it on americanbar.org."}

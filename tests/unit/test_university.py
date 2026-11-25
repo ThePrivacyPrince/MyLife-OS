@@ -17,6 +17,9 @@ ALLOWED_DOMAINS = {
     "cs50.harvard.edu", "docs.python.org", "developer.mozilla.org", "requests.readthedocs.io", "weather.gov",
     "openpolicyagent.org", "developer.hashicorp.com", "nist.gov", "csrc.nist.gov", "iso.org", "aicpa-cima.com",
     "lsac.org", "isaca.org", "pecb.com", "pwia.org", "yamahawaverunners.com", "thisoldhouse.com",
+    # LOPS201: primary law, regulators and the standard-template publishers
+    "eur-lex.europa.eu", "ico.org.uk", "cppa.ca.gov", "law.cornell.edu", "uniformlaws.org", "cloc.org",
+    "commonpaper.com", "bonterms.com", "ironcladapp.com", "iapp.org",
 }
 
 
@@ -166,3 +169,18 @@ def test_uni11_course_report_and_semester(s):
     U.start_unit(s, "NEG101-U1", T)
     r = U.course_report(s, "NEG101", T)
     assert r.levels["NEG101-U1"] == "introduced" and r.cards_active == len(U.cards_for("NEG101-U1"))
+
+
+def test_uni12_career_sprint_runs_beside_the_semester():
+    # LOPS201 is a sprint: outside the Rule of One, shown with the current semester until it ends
+    co = U.course("LOPS201")
+    assert co["role"] == "sprint" and co["semester"] is None and co["dept"] == "LAW"
+    assert [c["code"] for c in U.sprints(dt.date(2026, 11, 25))] == ["LOPS201"]
+    active = [c["code"] for c in U.active_courses(dt.date(2026, 12, 10))]
+    assert active[0] == "LOPS201" and {"OWN101", "NEG101", "SYS101"} <= set(active)
+    assert "LOPS201" not in [c["code"] for c in U.active_courses(dt.date(2026, 12, 28))]
+    units = U.units("LOPS201")
+    assert len(units) == 6 and all(u["deliverable"] and u["quiz"] for u in units)
+    assert all(U.cards_for(u["key"]) for u in units), "every unit adds flashcards"
+    # SYS101 waits until the sprint is done (week 5 of S1)
+    assert U.unit("SYS101-U1")["weeks"] == "5-6"
