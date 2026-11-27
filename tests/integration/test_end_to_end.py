@@ -53,8 +53,10 @@ def test_int03_goal_links(s, today):
 
 def test_int04_cli(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("LIFEOS_DB", str(tmp_path / "cli.db"))
+    from lifeos.config import get_settings
+    d = get_settings().today().isoformat()  # seed dates tasks from the real clock, so view that same day
     assert main(["seed"]) == 0
-    assert main(["today", "--date", "2026-11-18"]) == 0
-    assert main(["review", "--date", "2026-11-18"]) == 0
+    assert main(["today", "--date", d]) == 0
+    assert main(["review", "--date", d]) == 0
     out = capsys.readouterr().out
-    assert "Finish RXO onboarding requirements" in out and "Review 2026-11-18" in out
+    assert "Finish RXO onboarding requirements" in out and f"Review {d}" in out

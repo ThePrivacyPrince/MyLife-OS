@@ -5,7 +5,7 @@ from streamlit.testing.v1 import AppTest
 from lifeos.config import REPO_ROOT
 
 APP = str(REPO_ROOT / "lifeos" / "dashboard" / "app.py")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Jobs", "Add", "Recurring", "All tasks", "Review"]
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Jobs", "Studio", "Add", "Recurring", "All tasks", "Review"]
 
 
 @pytest.fixture
@@ -352,5 +352,27 @@ def test_int25_job_prep_role_to_strategy_requirements_and_task(seeded_db):
         at.session_state["job_view"] = v
         at.run()
         assert not at.exception, at.exception
+    at.sidebar.radio[0].set_value("Today").run()
+    assert not at.exception
+
+
+def test_int26_studio_brand_then_piece_to_posted(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Studio").run()
+    assert not at.exception, at.exception
+    at.session_state["studio_view"] = "Brands"
+    at.run()
+    at.text_input(key="bn_n").set_value("Valentino Beauty")
+    at.selectbox(key="bn_s").set_value("gifted")
+    [b for b in at.button if b.label == "Add brand"][0].click().run()
+    assert any("Brand added" in x.value for x in at.success), [e.value for e in at.error]
+    at.session_state["studio_view"] = "Content"
+    at.run()
+    at.text_input(key="sn_t").set_value("Vendetta - 15s commercial")
+    [b for b in at.button if b.label == "Add piece"][0].click().run()
+    assert any("Piece added" in x.value for x in at.success), [e.value for e in at.error]
+    [b for b in at.button if b.label == "📋 Schedule it"][0].click().run()
+    assert not at.exception, at.exception
     at.sidebar.radio[0].set_value("Today").run()
     assert not at.exception

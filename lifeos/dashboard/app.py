@@ -31,6 +31,7 @@ from lifeos.services import acquisitions as Q
 from lifeos.services import university as UNI
 from lifeos.services import notes as NT
 from lifeos.services import jobs as JB
+from lifeos.services import studio as ST
 from lifeos.engines import jobprep as JP
 from lifeos.engines import learning as LRN
 from lifeos.engines import acquisition as AQ
@@ -89,7 +90,7 @@ def val(key: str, default=None):
 
 # ------------------------------------------------------------------ sidebar
 st.sidebar.title("◎ LIFE OS")
-PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Jobs", "Add", "Recurring",
+PAGES = ["Today", "Planner", "Plan", "Timeline", "Money", "Deals", "University", "Jobs", "Studio", "Add", "Recurring",
          "All tasks", "Review"]
 page = st.sidebar.radio("View", PAGES, label_visibility="collapsed", key="nav")
 day: dt.date = st.sidebar.date_input("Planning date", value=get_settings().today())
@@ -2150,6 +2151,156 @@ def page_jobs() -> None:
     role_tabs(rep)
 
 
+# ------------------------------------------------------------------ studio
+NEXT_LABEL = {"idea": "📋 Schedule it", "planned": "🎬 Mark shot", "shot": "✂️ Mark edited", "edited": "✅ Mark posted"}
+
+
+def _date_bits(c) -> str:
+    bits = []
+    if c.brand:
+        bits.append(f"{ST.BRAND_ICON[c.brand.status]} {c.brand.name}")
+    if c.platform:
+        bits.append(c.platform)
+    if c.status == "posted" and c.posted_on:
+        bits.append(f"posted {c.posted_on:%b} {c.posted_on.day}")
+    else:
+        if c.shoot_date:
+            late = c.status in ("idea", "planned") and c.shoot_date < day
+            bits.append((":red[" if late else "") + f"shoot {c.shoot_date:%a %b} {c.shoot_date.day}" + ("]" if late else ""))
+        if c.post_date:
+            late = c.post_date < day
+            bits.append((":red[" if late else "") + f"post {c.post_date:%a %b} {c.post_date.day}" + ("]" if late else ""))
+    return " · ".join(bits)
+
+
+def content_card(c, prefix: str = "") -> None:
+    cid, p = c.id, f"{prefix}sc{c.id}"
+    with st.expander(f"{ST.CONTENT_ICON[c.status]} **{c.title}** · {_date_bits(c)}"):
+        if c.plan:
+            st.markdown(c.plan)
+        if c.link:
+            st.markdown(f"🔗 {c.link}")
+        if c.status != "posted":
+            nxt = ST.CONTENT_STATUSES[ST.CONTENT_STATUSES.index(c.status) + 1]
+            if nxt == "posted":
+                st.text_input("Link to the post", key=f"{p}lk", placeholder="Paste the post URL")
+                if c.brand_id:
+                    st.checkbox("Disclosed (#gifted / #ad or the paid-partnership label)", value=c.disclosed, key=f"{p}ds")
+            st.button(NEXT_LABEL[c.status], key=f"{p}nx", type="primary", on_click=act, args=(
+                lambda s: ST.advance(s, cid, day, link=val(f"{p}lk", ""), disclosed=val(f"{p}ds")),
+                f"{c.title}: {nxt}" + (" - brand follow-up set" if nxt == "posted" and c.brand_id else "")))
+        with st.popover("Edit"):
+            st.text_input("Title", value=c.title, key=f"{p}t")
+            bl = ST.brands(s)
+            st.selectbox("Brand", [None] + [b.id for b in bl], key=f"{p}b",
+                         index=([None] + [b.id for b in bl]).index(c.brand_id) if c.brand_id in [b.id for b in bl] else 0,
+                         format_func=lambda i: "- none (own content)" if i is None else next(b.name for b in bl if b.id == i))
+            cc = st.columns(2)
+            cc[0].date_input("Shoot date", value=c.shoot_date, key=f"{p}sd")
+            cc[1].date_input("Post date", value=c.post_date, key=f"{p}pd")
+            st.text_input("Platform", value=c.platform, key=f"{p}pf")
+            st.text_area("Concept & shot list", value=c.plan, key=f"{p}pl", height=120)
+            st.text_input("Post link", value=c.link, key=f"{p}ln")
+            st.button("Save", key=f"{p}sv", on_click=act, args=(lambda s: ST.update_content(
+                s, cid, title=val(f"{p}t"), brand_id=val(f"{p}b"), shoot_date=val(f"{p}sd"), post_date=val(f"{p}pd"),
+                platform=val(f"{p}pf"), plan=val(f"{p}pl"), link=val(f"{p}ln")), "Saved"))
+
+
+def brand_card(b) -> None:
+    bid = b.id
+    pieces = [c for c in ST.content(s) if c.brand_id == bid]
+    posted = sum(c.status == "posted" for c in pieces)
+    with st.container(border=True):
+        fu = ""
+        if b.follow_up:
+            d = (b.follow_up - day).days
+            fu = (" · :red[follow up overdue]" if d < 0 else " · **follow up today**" if d == 0
+                  else f" · follow up {b.follow_up:%a %b} {b.follow_up.day}")
+        st.markdown(f"{ST.BRAND_ICON[b.status]} **{b.name}** · {b.status}{fu}  \n"
+                    f":gray[{b.contact or ('no contact yet - find out who sent it' if b.status == 'gifted' else 'no contact yet')} · {len(pieces)} piece(s), {posted} posted]")
+        if b.notes:
+            st.caption(b.notes)
+        due_now = bool(b.follow_up and b.follow_up <= day)
+        c = st.columns([1, 1, 4]) if due_now else st.columns([1, 5])
+        if due_now:
+            c[0].button("Done +14d", key=f"bfd{bid}", help="Followed up - check in again in 14 days", on_click=act,
+                        args=(lambda s: ST.update_brand(s, bid, follow_up=day + dt.timedelta(days=14)), "Next follow-up in 14 days"))
+        with c[1 if due_now else 0].popover("Edit"):
+            st.selectbox("Status", ST.BRAND_STATUSES, index=ST.BRAND_STATUSES.index(b.status), key=f"bst{bid}",
+                         format_func=lambda x: f"{ST.BRAND_ICON[x]} {x}")
+            st.date_input("Next follow-up", value=b.follow_up, key=f"bfu{bid}")
+            st.text_input("Contact (person, email, PR agency)", value=b.contact, key=f"bct{bid}")
+            st.text_area("Notes", value=b.notes, key=f"bnt{bid}", height=90)
+            st.button("Save", key=f"bsv{bid}", on_click=act, args=(lambda s: ST.update_brand(
+                s, bid, status=val(f"bst{bid}"), follow_up=val(f"bfu{bid}"), contact=val(f"bct{bid}", ""),
+                notes=val(f"bnt{bid}", "")), "Brand saved"))
+
+
+def page_studio() -> None:
+    st.title("🎬 Studio")
+    st.caption("Run it like a job: shoot what's planned, post on schedule, and turn every post into the next brand conversation.")
+    sb = ST.scoreboard(s, day)
+    m = st.columns(4)
+    m[0].metric("Posted this month", sb["posted_this_month"])
+    m[1].metric("In production", sb["in_production"])
+    m[2].metric("Active brands", sb["brands_active"])
+    m[3].metric("Paying brands", sb["paid_brands"])
+    ag = ST.due(s, day)
+    if ag:
+        with st.container(border=True):
+            st.markdown("**🔥 Needs you today**")
+            for c in ag.shoots:
+                st.markdown(f"- 🎬 Shoot: **{c.title}**" + (f" ({c.brand.name})" if c.brand else ""))
+            for c in ag.posts:
+                st.markdown(f"- 📤 Post: **{c.title}** - {c.status}")
+            for b in ag.follow_ups:
+                st.markdown(f"- 💬 Follow up: **{b.name}**" + (f" · {b.contact}" if b.contact else ""))
+    SS.setdefault("studio_view", "Content")
+    view = st.segmented_control("Studio view", ["Content", "Brands"], key="studio_view", label_visibility="collapsed") or "Content"
+    if view == "Content":
+        bl = ST.brands(s)
+        with st.expander("➕ New piece"):
+            st.text_input("Working title", key="sn_t", placeholder="e.g. Vendetta - 15s cinematic commercial")
+            c = st.columns(3)
+            c[0].selectbox("Brand", [None] + [b.id for b in bl], key="sn_b", index=0,
+                           format_func=lambda i: "- none (own content)" if i is None else next(b.name for b in bl if b.id == i))
+            c[1].date_input("Shoot date", value=None, key="sn_sd")
+            c[2].date_input("Post date", value=None, key="sn_pd")
+            st.text_input("Platform", key="sn_pf", placeholder="Instagram, TikTok, YouTube")
+            st.text_area("Concept & shot list", key="sn_pl", height=100,
+                         placeholder="Look, location, wardrobe, shots, hook. e.g. dark set, gold reflections, slow motion")
+            st.button("Add piece", type="primary", key="sn_add", on_click=act, args=(lambda s: ST.add_content(
+                s, val("sn_t", ""), day, brand_id=val("sn_b"), shoot_date=val("sn_sd"), post_date=val("sn_pd"),
+                platform=val("sn_pf", ""), plan=val("sn_pl", "")), "Piece added"))
+        rows = ST.content(s)
+        if not rows:
+            st.caption("Nothing in production yet. Add your first piece above.")
+        for status, label in (("planned", "📋 Planned"), ("shot", "🎬 Shot - edit next"), ("edited", "✂️ Edited - post next"),
+                              ("idea", "💡 Ideas"), ("posted", "✅ Posted")):
+            group = [c for c in rows if c.status == status]
+            if status == "posted":
+                group = group[:10]
+            if group:
+                st.markdown(f"**{label}** ({len(group)})")
+                for c in group:
+                    content_card(c)
+    else:
+        with st.expander("➕ Add brand"):
+            c = st.columns(2)
+            c[0].text_input("Brand", key="bn_n", placeholder="e.g. Valentino Beauty")
+            c[1].selectbox("Status", ST.BRAND_STATUSES, key="bn_s", format_func=lambda x: f"{ST.BRAND_ICON[x]} {x}")
+            st.text_input("Contact (person, email, PR agency)", key="bn_c")
+            st.date_input("Follow up on", value=None, key="bn_f")
+            st.text_area("Notes", key="bn_nt", height=80, placeholder="What they sent, what they're launching next, what you pitched")
+            st.button("Add brand", type="primary", key="bn_add", on_click=act, args=(lambda s: ST.add_brand(
+                s, val("bn_n", ""), day, contact=val("bn_c", ""), status=val("bn_s"), follow_up=val("bn_f"),
+                notes=val("bn_nt", "")), "Brand added"))
+        st.caption("🎯 prospect · 🎁 gifted · 💬 talking · 💰 paid · 💤 paused. Posting brand content sets a follow-up "
+                   f"{ST.FOLLOW_UP_AFTER_POST} days later - ask about upcoming launches and paid work.")
+        for b in ST.brands(s):
+            brand_card(b)
+
+
 def page_planner() -> None:
     a, v = _pl_anchor(), _pl_view()
     top = st.columns([2.6, 0.55, 0.9, 0.55, 3.4])
@@ -2202,6 +2353,11 @@ def page_today() -> None:
     _due = len(UNI.due_cards(s, day, _m, _low))
     if _due:
         st.caption(f"🧠 {_due} flashcard(s) due · ~{max(1, _due * LRN.SECONDS_PER_CARD // 60)} min - University → Review")
+    _ag = ST.due(s, day)
+    if _ag:
+        bits = [f"🎬 shoot {len(_ag.shoots)}" if _ag.shoots else "", f"📤 post {len(_ag.posts)}" if _ag.posts else "",
+                f"💬 follow up {len(_ag.follow_ups)} brand(s)" if _ag.follow_ups else ""]
+        st.caption("🎬 **Studio today:** " + " · ".join(b for b in bits if b) + " - Studio page")
     for r in JB.coming_up(s, day, 7):
         d = (r.next_step_date - day).days
         when = "today" if d == 0 else (f"{-d} day(s) overdue" if d < 0 else f"in {d} day(s)")
@@ -2946,6 +3102,6 @@ def page_review() -> None:
         lambda s: save_review(s, day, val("rv_note", "")), "Review saved"))
 
 
-{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Deals": page_deals, "University": page_university, "Jobs": page_jobs, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
+{"Today": page_today, "Planner": page_planner, "Plan": page_plan, "Timeline": page_timeline, "Money": page_money, "Deals": page_deals, "University": page_university, "Jobs": page_jobs, "Studio": page_studio, "Add": page_add, "Recurring": page_recurring, "All tasks": page_all,
  "Review": page_review}[page]()
 s.close()

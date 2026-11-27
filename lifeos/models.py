@@ -723,3 +723,49 @@ class AutomationIdea(Base):
     status: Mapped[str] = mapped_column(String(12), default="idea")
     link: Mapped[str] = mapped_column(String(500), default="")  # demo, repo, screenshot
     created_on: Mapped[dt.date] = mapped_column(Date)
+
+
+# ---------------------------------------------------------------- studio (content creation)
+class Brand(Base):
+    """A brand you work with or want to: who to talk to, where things stand, when to follow up."""
+
+    __tablename__ = "studio_brands"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    contact: Mapped[str] = mapped_column(String(300), default="")  # person, email, PR agency
+    status: Mapped[str] = mapped_column(String(12), default="prospect")
+    follow_up: Mapped[dt.date | None] = mapped_column(Date)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_on: Mapped[dt.date] = mapped_column(Date)
+
+
+class ContentPiece(Base):
+    """One video or post, from idea to published."""
+
+    __tablename__ = "studio_content"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    brand_id: Mapped[int | None] = mapped_column(ForeignKey("studio_brands.id"))
+    status: Mapped[str] = mapped_column(String(10), default="idea")
+    shoot_date: Mapped[dt.date | None] = mapped_column(Date)
+    post_date: Mapped[dt.date | None] = mapped_column(Date)
+    platform: Mapped[str] = mapped_column(String(40), default="")
+    plan: Mapped[str] = mapped_column(Text, default="")  # concept + shot list
+    link: Mapped[str] = mapped_column(String(500), default="")
+    disclosed: Mapped[bool] = mapped_column(Boolean, default=False)
+    posted_on: Mapped[dt.date | None] = mapped_column(Date)
+    created_on: Mapped[dt.date] = mapped_column(Date)
+    brand: Mapped[Brand | None] = relationship()
+
+
+class StudioEvent(Base):
+    """Append-only history for brands and content (status, dates)."""
+
+    __tablename__ = "studio_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entity: Mapped[str] = mapped_column(String(10))  # brand | content
+    entity_id: Mapped[int] = mapped_column(Integer)
+    event_type: Mapped[str] = mapped_column(String(24))
+    from_value: Mapped[str | None] = mapped_column(String(200))
+    to_value: Mapped[str | None] = mapped_column(String(200))
+    at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
