@@ -64,4 +64,26 @@ A payoff plan built on your **💳 Money I owe** debts, plus eight plays that ho
 
 **Today shows:** minimums due soon or missed, and the ☕ micro-payment button on micro days.
 Research behind the strategies: Amar et al. (2011) and Gathergood et al. (2019), both in the University library (OWN101, unit 2).
-Tests: `tests/unit/test_debt_plan.py` (DEBT-01..10), `test_int27`.
+Tests: `tests/unit/test_debt_plan.py` (DEBT-01..13), `test_int27`.
+
+### Debt status, owner and settling old accounts
+- **Each debt has three labels:**
+  - **Status:** Active, Payment plan, Charged off or In collections.
+  - **Owner:** 👤 Personal or 💼 Business, e.g. Jet Life's card.
+  - **Holder:** who holds it now (bank, collection agency, school, landlord).
+- **Active and payment-plan debts** are in the monthly plan.
+- **Charged-off and collection debts** go to **🤝 Settle later**, outside the monthly plan. For each one:
+  - **Dates:** enter the first missed payment. The app shows roughly when it leaves your credit report (7 years plus 180 days).
+  - **Proof:** tick whether the collector proved the debt in writing (validation).
+  - **Offers:** set an opening offer, a target and a walk-away (the most you'll pay), each shown as a % of the balance.
+  - **Record a settlement** only once it's **in writing**. The rest is marked forgiven and the debt closes. If $600 or more is forgiven, a FIN task reminds you to watch for a **1099-C** and ask a tax pro about the insolvency exclusion.
+- **🔍 Credit report check:** get free reports from all three bureaus at AnnualCreditReport.com. Enter each account (last 4 digits only) and link it to a debt. LIFE OS flags:
+  - balance mismatches
+  - status mismatches, e.g. settled here but still reported as charged off
+  - a wrong first-missed-payment date
+  - accounts that should have aged off (7 years)
+  - accounts on your report but not in LIFE OS
+  - debts not matched to a report line
+
+  Fix each one in LIFE OS or dispute it with the bureau. A play reminds you to check again every 4 months.
+- **Strategies, not legal advice:** check your state's time limit for lawsuits before paying or promising anything on an old debt. Free legal aid and the CFPB's debt-collection guides can help.

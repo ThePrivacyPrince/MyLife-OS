@@ -726,6 +726,126 @@ def money_settings() -> None:
 PLAY_ICON = {"done": "✅", "todo": "⬜", "warn": "⚠️"}
 
 
+def _ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def debt_row(f, pv) -> None:
+    k = f"dt{f.id}"
+    settle = f.debt_status in DP.SETTLE
+    with st.container(border=True):
+        head = f"**{f.name}** · {M.fmt(M.remaining(f))} owed · {DP.OWNERS.get(f.owner or 'personal')}"
+        head += f" · {DP.STATUSES.get(f.debt_status or 'active')}"
+        if f.holder:
+            head += f" · held by {f.holder}"
+        if not settle:
+            if f.apr is not None:
+                head += f" · {f.apr}% APR"
+            if f.min_payment is not None:
+                head += f" · min {M.fmt(f.min_payment)}"
+            if f.due_day:
+                head += f" · due the {_ordinal(f.due_day)}"
+            head += " · autopay ✅" if f.autopay else ""
+            if pv.target and f.id == pv.target.id:
+                head += " · 🎯 **target**"
+            miss = DP.missing_terms(f)
+            st.markdown(head + (f"  \n:orange[Missing: {', '.join(miss)}]" if miss else ""))
+        else:
+            off = DP.report_age_off(f)
+            st.markdown(head + (f"  \n:gray[Should leave your credit report around {off:%b %Y} (7 years from the first "
+                                f"missed payment).]" if off else "  \n:orange[Add the first missed-payment date.]"))
+        with st.popover("Status, owner, holder"):
+            st.selectbox("Status", list(DP.STATUSES), index=list(DP.STATUSES).index(f.debt_status or "active"),
+                         key=f"{k}st", format_func=lambda x: DP.STATUSES[x])
+            st.selectbox("Whose debt", list(DP.OWNERS), index=list(DP.OWNERS).index(f.owner or "personal"),
+                         key=f"{k}ow", format_func=lambda x: DP.OWNERS[x])
+            st.text_input("Held by now (bank, collection agency, school)", value=f.holder or "", key=f"{k}ho")
+            st.date_input("First missed payment (if any)", value=f.first_delinquency, key=f"{k}fd")
+            st.checkbox("Collector proved the debt in writing (validation)", value=f.validated, key=f"{k}va")
+            st.button("Save", key=f"{k}ps", on_click=act, args=(lambda s, i=f.id, k=k: DP.set_profile(
+                s, i, debt_status=val(f"{k}st"), owner=val(f"{k}ow"), holder=val(f"{k}ho", ""),
+                first_delinquency=val(f"{k}fd"), validated=val(f"{k}va")), "Debt updated"))
+        if not settle:
+            cc = st.columns([1, 1, 1, 1, 1])
+            cc[0].text_input("APR %", value="" if f.apr is None else str(f.apr), key=f"{k}a", placeholder="0 if none")
+            cc[1].text_input("Minimum $", value="" if f.min_payment is None else str(f.min_payment), key=f"{k}m")
+            cc[2].number_input("Due day", min_value=1, max_value=31, value=f.due_day, key=f"{k}d", placeholder="1-31")
+            cc[3].checkbox("Autopay on", value=f.autopay, key=f"{k}p")
+            cc[4].button("Save terms", key=f"{k}s", on_click=act, args=(lambda s, i=f.id, k=k: DP.set_terms(
+                s, i, apr=val(f"{k}a"), min_payment=val(f"{k}m"), due_day=val(f"{k}d"), autopay=val(f"{k}p")),
+                "Terms saved"))
+            cc = st.columns([2, 1, 2])
+            cc[0].text_input("Statement balance", key=f"{k}b", label_visibility="collapsed",
+                             placeholder="Balance on your latest statement")
+            cc[1].button("Match statement", key=f"{k}bs", on_click=act, args=(lambda s, i=f.id, k=k: DP.sync_statement(
+                s, i, val(f"{k}b", ""), day), "Matched to the statement (interest & fees logged)"))
+            if f.apr is not None and f.apr >= DP.HIGH_APR and not M.get_setting(s, f"debt.asked.{f.id}"):
+                cc[2].button("📞 Plan the lower-APR call", key=f"{k}ask", on_click=act, args=(
+                    lambda s, i=f.id: DP.ask_for_lower_apr(s, i, day), "Task added for the call - script is in the task"))
+        else:
+            bal = M.remaining(f)
+            cc = st.columns([2, 1, 2])
+            cc[0].text_input("Current balance", key=f"{k}b", label_visibility="collapsed",
+                             placeholder="Current balance (from a letter or your report)")
+            cc[1].button("Update balance", key=f"{k}bs", on_click=act, args=(lambda s, i=f.id, k=k: DP.sync_statement(
+                s, i, val(f"{k}b", ""), day), "Balance updated (difference logged)"))
+            st.caption("Settlement plan - offer low, know your limit, and only pay once the agreement is in writing. "
+                       "Percentages are of the current balance.")
+            cc = st.columns(4)
+            for col, label, attr, key in ((cc[0], "Opening offer $", "settle_open", "so"), (cc[1], "Target $", "settle_target", "sg"),
+                                          (cc[2], "Walk-away (most you'll pay) $", "settle_walkaway", "sw")):
+                v = getattr(f, attr)
+                col.text_input(label, value="" if v is None else str(v), key=f"{k}{key}",
+                               help=None if v is None or not bal else f"{v / bal:.0%} of the balance")
+            cc[3].markdown("&nbsp;")
+            cc[3].button("Save offers", key=f"{k}sv", on_click=act, args=(lambda s, i=f.id, k=k: DP.set_settlement(
+                s, i, opening=val(f"{k}so"), target=val(f"{k}sg"), walkaway=val(f"{k}sw")), "Settlement plan saved"))
+            with st.expander("✍️ Record a settlement"):
+                st.text_input("Amount you're paying $", key=f"{k}rp")
+                st.text_input("Agreed with", value=f.holder or "", key=f"{k}rw")
+                st.checkbox("I have it in writing: this amount settles the debt in full", key=f"{k}rw2")
+                st.button("Record settlement", key=f"{k}rs", type="primary", on_click=act, args=(
+                    lambda s, i=f.id, k=k: DP.record_settlement(s, i, val(f"{k}rp", ""), day,
+                                                                in_writing=bool(val(f"{k}rw2")), who=val(f"{k}rw", "")),
+                    "Settled - the rest is marked forgiven (check the tax task if $600+)"))
+
+
+def credit_report_check(fs) -> None:
+    with st.expander("🔍 Credit report check - for accuracy"):
+        st.caption("Get your free reports from all three bureaus at AnnualCreditReport.com (the official free site). "
+                   "Enter each account you see, link it to a debt, and LIFE OS flags what doesn't match - fix it here "
+                   "or dispute it with the bureau. Last 4 digits only, never full account numbers. Nothing leaves your "
+                   "computer.")
+        for fd in DP.reconcile(s, day):
+            st.warning(fd.message)
+        names = {f.id: f.name for f in fs}
+        cc = st.columns(3)
+        cc[0].selectbox("Bureau", DP.BUREAUS, key="cr_bureau")
+        cc[1].text_input("Creditor as listed", key="cr_cred", placeholder="e.g. AMERICAN EXPRESS")
+        cc[2].text_input("Last 4", key="cr_last4", max_chars=4)
+        cc = st.columns(4)
+        cc[0].selectbox("Status on report", DP.REPORT_STATUSES, key="cr_status",
+                        format_func=lambda x: x.replace("_", " "))
+        cc[1].text_input("Balance shown $", key="cr_bal")
+        cc[2].date_input("First missed payment shown", value=None, key="cr_fd")
+        cc[3].date_input("Report date", value=day, key="cr_pulled")
+        cc = st.columns([3, 1])
+        cc[0].selectbox("Matches which debt?", [None] + list(names), key="cr_fund", index=0,
+                        format_func=lambda i: "- not in LIFE OS yet" if i is None else names[i])
+        cc[1].markdown("&nbsp;")
+        cc[1].button("Add line", key="cr_add", type="primary", on_click=act, args=(lambda s: DP.add_report_item(
+            s, bureau=val("cr_bureau"), creditor=val("cr_cred", ""), status=val("cr_status"), pulled_on=val("cr_pulled"),
+            last4=val("cr_last4", ""), balance=val("cr_bal"), first_delinquency=val("cr_fd"), fund_id=val("cr_fund")),
+            "Report line added"))
+        items = DP.report_items(s)
+        if items:
+            st.dataframe([{"Pulled": f"{i.pulled_on:%b %d, %Y}", "Bureau": i.bureau,
+                           "Account": i.creditor + (f" ••{i.last4}" if i.last4 else ""),
+                           "Status": i.status.replace("_", " "), "Balance": M.fmt(i.balance),
+                           "Debt in LIFE OS": names.get(i.fund_id, "-")} for i in items],
+                         hide_index=True, use_container_width=True)
+
+
 def debt_playbook() -> None:
     from lifeos.engines import debt as DE
     pv = DP.plan(s)
@@ -734,7 +854,10 @@ def debt_playbook() -> None:
     chosen = pv.chosen
     paid_m, budget = DP.month_progress(s, day)
     c = st.columns(4)
-    c[0].metric("Still owed", M.fmt(owed))
+    in_plan = sum((M.remaining(f) for f in DP.debts(s, "plan")), M.ZERO)
+    biz = sum((M.remaining(f) for f in fs if f.owner == "business"), M.ZERO)
+    c[0].metric("Still owed", M.fmt(owed), help=f"In the monthly plan {M.fmt(in_plan)} · settle later "
+                f"{M.fmt(owed - in_plan)} · business {M.fmt(biz)} · personal {M.fmt(owed - biz)}")
     free = chosen.debt_free(day) if chosen else None
     c[1].metric("Debt-free" + (" (planned debts)" if pv.incomplete else ""),
                 f"{free:%b %Y}" if free else ("never at this pace" if chosen else "-"),
@@ -760,37 +883,17 @@ def debt_playbook() -> None:
     st.markdown("#### Your debts")
     if not fs:
         st.caption("Add debts on the 💳 Money I owe tab first.")
-    for f in fs:
-        k = f"dt{f.id}"
-        with st.container(border=True):
-            miss = DP.missing_terms(f)
-            head = f"**{f.name}** · {M.fmt(M.remaining(f))} owed"
-            if f.apr is not None:
-                head += f" · {f.apr}% APR"
-            if f.min_payment is not None:
-                head += f" · min {M.fmt(f.min_payment)}"
-            if f.due_day:
-                head += f" · due the {f.due_day}{'th' if 10 <= f.due_day % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(f.due_day % 10, 'th')}"
-            head += " · autopay ✅" if f.autopay else ""
-            if pv.target and f.id == pv.target.id:
-                head += " · 🎯 **target**"
-            st.markdown(head + (f"  \n:orange[Missing: {', '.join(miss)}]" if miss else ""))
-            cc = st.columns([1, 1, 1, 1, 1])
-            cc[0].text_input("APR %", value="" if f.apr is None else str(f.apr), key=f"{k}a", placeholder="e.g. 24.99")
-            cc[1].text_input("Minimum $", value="" if f.min_payment is None else str(f.min_payment), key=f"{k}m")
-            cc[2].number_input("Due day", min_value=1, max_value=31, value=f.due_day, key=f"{k}d", placeholder="1-31")
-            cc[3].checkbox("Autopay on", value=f.autopay, key=f"{k}p")
-            cc[4].button("Save terms", key=f"{k}s", on_click=act, args=(lambda s, i=f.id, k=k: DP.set_terms(
-                s, i, apr=val(f"{k}a"), min_payment=val(f"{k}m"), due_day=val(f"{k}d"), autopay=val(f"{k}p")),
-                "Terms saved"))
-            cc = st.columns([2, 1, 2])
-            cc[0].text_input("Statement balance", key=f"{k}b", label_visibility="collapsed",
-                             placeholder="Balance on your latest statement")
-            cc[1].button("Match statement", key=f"{k}bs", on_click=act, args=(lambda s, i=f.id, k=k: DP.sync_statement(
-                s, i, val(f"{k}b", ""), day), "Matched to the statement (interest & fees logged)"))
-            if f.apr is not None and f.apr >= DP.HIGH_APR and not M.get_setting(s, f"debt.asked.{f.id}"):
-                cc[2].button("📞 Plan the lower-APR call", key=f"{k}ask", on_click=act, args=(
-                    lambda s, i=f.id: DP.ask_for_lower_apr(s, i, day), "Task added for the call - script is in the task"))
+    plan_fs, settle_fs = DP.debts(s, "plan"), DP.debts(s, "settle")
+    if plan_fs:
+        st.markdown("**In the monthly plan**")
+    for f in plan_fs:
+        debt_row(f, pv)
+    if settle_fs:
+        st.markdown("**🤝 Settle later** - charged off or in collections. Kept out of the monthly plan. Don't pay or "
+                    "promise anything until the dates, proof and your walk-away are set.")
+    for f in settle_fs:
+        debt_row(f, pv)
+    credit_report_check(fs)
     st.markdown("#### The plan")
     cc = st.columns(4)
     cc[0].selectbox("Strategy", DE.ORDERS, index=DE.ORDERS.index(pv.strategy), key="dp_strat",

@@ -121,7 +121,8 @@ def update_fund(s: Session, fund_id: int, *, name: str | None = None, target=...
 
 
 # ---------------------------------------------------------------- entries
-ENTRY_KINDS = {"save": ("add", "withdraw", "purchase"), "debt": ("payment", "charge"), "spend": ("spend",)}
+ENTRY_KINDS = {"save": ("add", "withdraw", "purchase"), "debt": ("payment", "charge", "forgiven"),
+               "spend": ("spend",)}
 
 
 def add_entry(s: Session, fund_id: int, kind: str, amount, *, day: dt.date | None = None, note: str = "",
@@ -143,6 +144,8 @@ def add_entry(s: Session, fund_id: int, kind: str, amount, *, day: dt.date | Non
             raise ReasonRequired("Taking money out of a fund needs a reason.")
         if amt > balance(f):
             raise ValidationError(f"Only {fmt(balance(f))} is in this fund.")
+    if kind == "forgiven" and not note.strip():
+        raise ReasonRequired("Forgiven debt needs a note - who agreed to it, and is it in writing?")
     if kind == "charge" and not note.strip():
         raise ReasonRequired("What was the new charge for?")
     e = FundEntry(fund_id=f.id, day=day, kind=kind, amount=amt, note=note.strip())
@@ -176,7 +179,7 @@ def owed_total(f: Fund) -> Decimal:
 def remaining(f: Fund) -> Decimal:
     """Debts: still owed. Savings: still to save."""
     if f.kind == "debt":
-        return max(ZERO, owed_total(f) - paid(f))
+        return max(ZERO, owed_total(f) - paid(f) - _sum(f, "forgiven"))
     if f.kind == "save":
         return max(ZERO, (f.target or ZERO) - balance(f))
     return ZERO
@@ -210,7 +213,7 @@ def progress(f: Fund, today: dt.date) -> Progress:
             return Progress(spent, None, 0.0, None, "no_budget", None)
         frac = float(min(spent / f.target, Decimal(1)))
         return Progress(spent, f.target, frac, None, "over_budget" if spent > f.target else "under_budget", None)
-    done = paid(f) if f.kind == "debt" else balance(f)
+    done = paid(f) + _sum(f, "forgiven") if f.kind == "debt" else balance(f)
     goal = owed_total(f) if f.kind == "debt" else (f.target or ZERO)
     frac = float(min(done / goal, Decimal(1))) if goal else 0.0
     left = max(ZERO, goal - done)

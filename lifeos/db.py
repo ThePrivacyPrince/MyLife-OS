@@ -36,6 +36,14 @@ ADDITIVE_COLUMNS = [
     ("funds", "min_payment", "VARCHAR(40)"),
     ("funds", "due_day", "INTEGER"),
     ("funds", "autopay", "BOOLEAN DEFAULT 0"),
+    ("funds", "debt_status", "VARCHAR(14) DEFAULT 'active'"),
+    ("funds", "owner", "VARCHAR(10) DEFAULT 'personal'"),
+    ("funds", "holder", "VARCHAR(120) DEFAULT ''"),
+    ("funds", "first_delinquency", "DATE"),
+    ("funds", "validated", "BOOLEAN DEFAULT 0"),
+    ("funds", "settle_open", "VARCHAR(40)"),
+    ("funds", "settle_target", "VARCHAR(40)"),
+    ("funds", "settle_walkaway", "VARCHAR(40)"),
 ]
 
 

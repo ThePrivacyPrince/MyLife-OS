@@ -119,3 +119,61 @@ def test_debt10_ask_for_lower_apr_creates_a_task_and_debt_free_goal(s):
     assert {x.key: x for x in DP.plays(s, T)}["ask"].status == "done"
     g, _ = DP.make_goal(s, T)
     assert g.pillar_code == "FIN" and g.title == "Debt-free" and g.target_date == DP.plan(s).chosen.debt_free(T)
+
+
+# ---------------------------------------------------------------- status, settling, credit report
+def test_debt11_charged_off_and_collections_leave_the_monthly_plan(s):
+    rent = M.create_fund(s, name="Last rent payment", space="owed", target=3200, counterparty="Former landlord", today=T)
+    DP.set_terms(s, rent.id, apr=0, min_payment=200, due_day=1)
+    DP.set_profile(s, rent.id, debt_status="payment_plan")
+    biz = _card(s, "Business card", owed=4000, apr="29.99", minimum=120)
+    DP.set_profile(s, biz.id, owner="business")
+    amex = M.create_fund(s, name="Amex (charged off)", space="owed", target=2500, today=T)
+    DP.set_profile(s, amex.id, debt_status="charged_off", holder="American Express", first_delinquency=dt.date(2024, 3, 1))
+    pv = DP.plan(s)
+    assert {f.id for f in pv.complete} == {rent.id, biz.id} and amex not in pv.incomplete
+    assert [f.id for f in DP.debts(s, "settle")] == [amex.id]
+    assert DP.report_age_off(amex) == dt.date(2031, 8, 28)  # 2024-03-01 + 180 days + 7 years
+    p = {x.key: x for x in DP.plays(s, T)}
+    assert p["settle"].status == "todo" and "walk-away" in p["settle"].detail
+    with pytest.raises(ValidationError):
+        DP.set_profile(s, amex.id, debt_status="vanished")
+
+
+def test_debt12_settle_in_writing_forgives_the_rest_and_flags_taxes(s):
+    col = M.create_fund(s, name="Chase (collections)", space="owed", target=3000, today=T)
+    DP.set_profile(s, col.id, debt_status="collections", holder="Collector LLC", validated=True,
+                   first_delinquency=dt.date(2024, 6, 1))
+    with pytest.raises(ValidationError):
+        DP.set_settlement(s, col.id, opening=1500, target=1200, walkaway=1400)  # opening above target
+    with pytest.raises(ValidationError):
+        DP.set_settlement(s, col.id, walkaway=5000)
+    DP.set_settlement(s, col.id, opening=900, target=1200, walkaway=1500)
+    assert {x.key: x for x in DP.plays(s, T)}["settle"].status == "done"
+    with pytest.raises(ValidationError):
+        DP.record_settlement(s, col.id, 1200, T, in_writing=False)
+    forgiven, task = DP.record_settlement(s, col.id, 1200, T, in_writing=True, who="Collector LLC")
+    assert forgiven == D(1800) and col.status == "done" and M.remaining(col) == 0 and M.paid(col) == D(1200)
+    assert task is not None and "1099-C" in task.title and task.due_date == dt.date(2027, 2, 15)
+
+
+def test_debt13_credit_report_check_finds_what_to_fix_or_dispute(s):
+    apple = M.create_fund(s, name="Apple Card", space="owed", target=1800, today=T)
+    DP.set_profile(s, apple.id, debt_status="charged_off", first_delinquency=dt.date(2024, 1, 10))
+    school = M.create_fund(s, name="Master's (school)", space="owed", target=6000, today=T)
+    DP.set_terms(s, school.id, apr=0, min_payment=250, due_day=1)
+    with pytest.raises(ValidationError):
+        DP.add_report_item(s, bureau="Equifax", creditor="Apple", status="charged_off", pulled_on=T, last4="12345678")
+    DP.add_report_item(s, bureau="Experian", creditor="GS Bank / Apple Card", status="charged_off", pulled_on=T,
+                       last4="4321", balance="1950", first_delinquency=dt.date(2023, 12, 10), fund_id=apple.id)
+    DP.add_report_item(s, bureau="Experian", creditor="Old Gym LLC", status="collections", pulled_on=T,
+                       balance="240", first_delinquency=dt.date(2018, 1, 5))
+    kinds = sorted(f.kind for f in DP.reconcile(s, T))
+    assert kinds == ["balance", "date", "missing_from_report", "not_tracked"]
+    old = DP.add_report_item(s, bureau="TransUnion", creditor="Ancient Card", status="charged_off", pulled_on=T,
+                             first_delinquency=dt.date(2018, 1, 5))
+    gone = M.create_fund(s, name="Ancient Card", space="owed", target=100, today=T)
+    DP.link_report_item(s, old.id, gone.id)
+    assert any(f.kind == "aged" for f in DP.reconcile(s, T))
+    p = {x.key: x for x in DP.plays(s, T)}
+    assert p["report"].status == "warn"

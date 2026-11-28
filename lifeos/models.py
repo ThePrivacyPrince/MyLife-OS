@@ -413,6 +413,14 @@ class Fund(Base):
     min_payment: Mapped[Decimal | None] = mapped_column(DecimalText)
     due_day: Mapped[int | None] = mapped_column(Integer)                # day of month the minimum is due
     autopay: Mapped[bool] = mapped_column(Boolean, default=False)       # minimum on autopay
+    debt_status: Mapped[str] = mapped_column(String(14), default="active")  # active | payment_plan | charged_off | collections
+    owner: Mapped[str] = mapped_column(String(10), default="personal")       # personal | business
+    holder: Mapped[str] = mapped_column(String(120), default="")             # who holds it now (bank, collector, school)
+    first_delinquency: Mapped[dt.date | None] = mapped_column(Date)          # drives the 7-year credit report clock
+    validated: Mapped[bool] = mapped_column(Boolean, default=False)          # collector proved the debt in writing
+    settle_open: Mapped[Decimal | None] = mapped_column(DecimalText)         # opening settlement offer
+    settle_target: Mapped[Decimal | None] = mapped_column(DecimalText)
+    settle_walkaway: Mapped[Decimal | None] = mapped_column(DecimalText)     # the most you'll pay
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     closed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
 
@@ -774,3 +782,19 @@ class StudioEvent(Base):
     from_value: Mapped[str | None] = mapped_column(String(200))
     to_value: Mapped[str | None] = mapped_column(String(200))
     at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class CreditReportItem(Base):
+    """One account as a credit bureau reports it, entered from your free report, matched to a debt."""
+
+    __tablename__ = "credit_report_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pulled_on: Mapped[dt.date] = mapped_column(Date)
+    bureau: Mapped[str] = mapped_column(String(12))  # Equifax | Experian | TransUnion
+    creditor: Mapped[str] = mapped_column(String(120))
+    last4: Mapped[str] = mapped_column(String(4), default="")
+    status: Mapped[str] = mapped_column(String(14))  # open | closed | charged_off | collections | paid
+    balance: Mapped[Decimal | None] = mapped_column(DecimalText)
+    first_delinquency: Mapped[dt.date | None] = mapped_column(Date)
+    fund_id: Mapped[int | None] = mapped_column(ForeignKey("funds.id"))
+    note: Mapped[str] = mapped_column(Text, default="")
