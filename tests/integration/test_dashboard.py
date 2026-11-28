@@ -376,3 +376,36 @@ def test_int26_studio_brand_then_piece_to_posted(seeded_db):
     assert not at.exception, at.exception
     at.sidebar.radio[0].set_value("Today").run()
     assert not at.exception
+
+
+def test_int27_debt_playbook_terms_plan_and_micro_payment(seeded_db):
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("Money").run()
+    assert not at.exception, at.exception
+    from lifeos.config import get_settings
+    from lifeos.db import make_engine, init_db, session_factory, unit_of_work
+    from lifeos.services import money as M
+    eng = make_engine(get_settings().database_url)
+    init_db(eng)
+    with unit_of_work(session_factory(eng)) as s:
+        fid = M.create_fund(s, name="Card A", space="owed", target=2000).id
+    at.run()
+    at.text_input(key=f"dt{fid}a").set_value("24.99")
+    at.text_input(key=f"dt{fid}m").set_value("60")
+    at.number_input(key=f"dt{fid}d").set_value(15)
+    [b for b in at.button if b.label == "Save terms"][0].click().run()
+    assert any("Terms saved" in x.value for x in at.success), [e.value for e in at.error]
+    at.selectbox(key="dp_strat").set_value("snowball")
+    at.text_input(key="dp_micro_amt").set_value("8")
+    [b for b in at.button if b.label == "Save plan"][0].click().run()
+    assert any("Plan saved" in x.value for x in at.success), [e.value for e in at.error]
+    micro = [b for b in at.button if b.label.startswith("☕ Micro-pay")]
+    assert micro, "micro-payment button shows on day one"
+    micro[0].click().run()
+    assert any("Micro-payment logged" in x.value for x in at.success), [e.value for e in at.error]
+    goal = [b for b in at.button if b.label.startswith("🎯 Make")]
+    goal[0].click().run()
+    assert not at.exception, at.exception
+    at.sidebar.radio[0].set_value("Today").run()
+    assert not at.exception

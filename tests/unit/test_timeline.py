@@ -59,6 +59,7 @@ def test_tml05_every_tier_needs_a_deadline(s, today):
 @pytest.fixture
 def goal(s, today):
     g, _ = C.create_goal(s, pillar="BUS", title="Four skis in the fleet", target_date=D(2027, 5, 31), today=today)
+    g.created_at = dt.datetime.combine(today, dt.time(12))  # pin to the test clock, not the real one
     return g
 
 

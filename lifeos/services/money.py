@@ -390,6 +390,9 @@ def suggest_split(s: Session, amount, today: dt.date) -> tuple[list[Split], Deci
     Each fund with a deadline is offered its weekly pace (or what's left, if less); others get 0 to fill by hand."""
     left = money(amount)
     out: list[Split] = []
+    from lifeos.services import debt_plan as DP  # payday rule: a set % of every payday to the target debt
+    rule = DP.payday_amount(s, amount)
+    target = DP.plan(s).target if rule else None
     for space in FUNDING_ORDER:
         for f in funds_in(s, space):
             if f.kind == "spend":
@@ -403,6 +406,8 @@ def suggest_split(s: Session, amount, today: dt.date) -> tuple[list[Split], Deci
                 why = f"{fmt(p.weekly_needed)}/week hits {f.deadline:%b} {f.deadline.day}"
             else:
                 want, why = ZERO, "no deadline - your call"
+            if target is not None and f.id == target.id and rule > want:
+                want, why = min(need, rule), f"payday rule: {DP.setting(s, 'payday_pct')}% to your target debt"
             give = min(want, left)
             left -= give
             out.append(Split(f, give, why if give == want else f"{why} (only {fmt(give)} left to give)"))

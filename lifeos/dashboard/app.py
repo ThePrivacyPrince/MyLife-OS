@@ -27,6 +27,8 @@ from lifeos.services import task_edit as E
 from lifeos.services import daily_check as D
 from lifeos.services import outcomes as O
 from lifeos.services import money as M
+from lifeos.services import debt_plan as DP
+from decimal import Decimal as D_
 from lifeos.services import acquisitions as Q
 from lifeos.services import university as UNI
 from lifeos.services import notes as NT
@@ -721,6 +723,135 @@ def money_settings() -> None:
         s, val("ms_cash", ""), day), "Saved"))
 
 
+PLAY_ICON = {"done": "✅", "todo": "⬜", "warn": "⚠️"}
+
+
+def debt_playbook() -> None:
+    from lifeos.engines import debt as DE
+    pv = DP.plan(s)
+    fs = DP.debts(s)
+    owed = sum((M.remaining(f) for f in fs), M.ZERO)
+    chosen = pv.chosen
+    paid_m, budget = DP.month_progress(s, day)
+    c = st.columns(4)
+    c[0].metric("Still owed", M.fmt(owed))
+    free = chosen.debt_free(day) if chosen else None
+    c[1].metric("Debt-free" + (" (planned debts)" if pv.incomplete else ""),
+                f"{free:%b %Y}" if free else ("never at this pace" if chosen else "-"),
+                help="On your chosen plan: every minimum, plus your extra, micro-payments rolled into one monthly budget."
+                     + (f" Not counted until you add their terms: {', '.join(f.name for f in pv.incomplete)}."
+                        if pv.incomplete else ""))
+    saved = pv.interest_saved()
+    c[2].metric("Interest saved vs minimums", M.fmt(saved) if saved is not None else "-")
+    c[3].metric("Paid this month", f"{M.fmt(paid_m)} / {M.fmt(budget)}" if budget else M.fmt(paid_m),
+                help="Payments logged this month vs your plan's monthly budget.")
+    if DP.micro_due(s, day) and pv.target:
+        st.button(f"☕ Micro-pay {M.fmt(D_(DP.setting(s, 'micro_amount')))} → {pv.target.name}", type="primary",
+                  key="dp_micro", on_click=act, args=(lambda s: DP.micro_pay(s, day), "Micro-payment logged ☕"))
+    for d in DP.due_status(s, day):
+        if d.missed:
+            st.error(f"**{d.fund.name}**: no payment logged for the last due date. Pay the minimum now and call about the late fee.")
+        else:
+            st.warning(f"**{d.fund.name}** minimum {M.fmt(d.fund.min_payment)} due "
+                       f"{'today' if d.days == 0 else f'in {d.days} day(s)'} ({d.due:%a %b} {d.due.day}).")
+    st.markdown("#### The playbook")
+    for p in DP.plays(s, day):
+        st.markdown(f"{PLAY_ICON[p.status]} **{p.title}** - {p.detail}")
+    st.markdown("#### Your debts")
+    if not fs:
+        st.caption("Add debts on the 💳 Money I owe tab first.")
+    for f in fs:
+        k = f"dt{f.id}"
+        with st.container(border=True):
+            miss = DP.missing_terms(f)
+            head = f"**{f.name}** · {M.fmt(M.remaining(f))} owed"
+            if f.apr is not None:
+                head += f" · {f.apr}% APR"
+            if f.min_payment is not None:
+                head += f" · min {M.fmt(f.min_payment)}"
+            if f.due_day:
+                head += f" · due the {f.due_day}{'th' if 10 <= f.due_day % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(f.due_day % 10, 'th')}"
+            head += " · autopay ✅" if f.autopay else ""
+            if pv.target and f.id == pv.target.id:
+                head += " · 🎯 **target**"
+            st.markdown(head + (f"  \n:orange[Missing: {', '.join(miss)}]" if miss else ""))
+            cc = st.columns([1, 1, 1, 1, 1])
+            cc[0].text_input("APR %", value="" if f.apr is None else str(f.apr), key=f"{k}a", placeholder="e.g. 24.99")
+            cc[1].text_input("Minimum $", value="" if f.min_payment is None else str(f.min_payment), key=f"{k}m")
+            cc[2].number_input("Due day", min_value=1, max_value=31, value=f.due_day, key=f"{k}d", placeholder="1-31")
+            cc[3].checkbox("Autopay on", value=f.autopay, key=f"{k}p")
+            cc[4].button("Save terms", key=f"{k}s", on_click=act, args=(lambda s, i=f.id, k=k: DP.set_terms(
+                s, i, apr=val(f"{k}a"), min_payment=val(f"{k}m"), due_day=val(f"{k}d"), autopay=val(f"{k}p")),
+                "Terms saved"))
+            cc = st.columns([2, 1, 2])
+            cc[0].text_input("Statement balance", key=f"{k}b", label_visibility="collapsed",
+                             placeholder="Balance on your latest statement")
+            cc[1].button("Match statement", key=f"{k}bs", on_click=act, args=(lambda s, i=f.id, k=k: DP.sync_statement(
+                s, i, val(f"{k}b", ""), day), "Matched to the statement (interest & fees logged)"))
+            if f.apr is not None and f.apr >= DP.HIGH_APR and not M.get_setting(s, f"debt.asked.{f.id}"):
+                cc[2].button("📞 Plan the lower-APR call", key=f"{k}ask", on_click=act, args=(
+                    lambda s, i=f.id: DP.ask_for_lower_apr(s, i, day), "Task added for the call - script is in the task"))
+    st.markdown("#### The plan")
+    cc = st.columns(4)
+    cc[0].selectbox("Strategy", DE.ORDERS, index=DE.ORDERS.index(pv.strategy), key="dp_strat",
+                    format_func=lambda o: "🏔️ Avalanche - highest APR first" if o == "avalanche" else "⛄ Snowball - smallest first")
+    cc[1].text_input("Extra per month $", value=DP.setting(s, "extra"), key="dp_extra",
+                     help="On top of every minimum - what you commit to, not what you hope for.")
+    cc[2].text_input("☕ Micro-payment $", value=DP.setting(s, "micro_amount"), key="dp_micro_amt", placeholder="e.g. 8")
+    cc[3].number_input("every N days", min_value=1, max_value=14, value=int(DP.setting(s, "micro_every")), key="dp_micro_every")
+    cc = st.columns([1, 3])
+    cc[0].text_input("💵 Payday rule %", value=DP.setting(s, "payday_pct"), key="dp_pct", placeholder="e.g. 25",
+                     help="Share of every paycheck or windfall suggested for your target debt in 'Got paid? Split it'.")
+    cc[1].markdown("&nbsp;")
+    cc[1].button("Save plan", type="primary", key="dp_save", on_click=act, args=(lambda s: DP.configure(
+        s, strategy=val("dp_strat"), extra=val("dp_extra"), micro_amount=val("dp_micro_amt", ""),
+        micro_every=val("dp_micro_every"), payday_pct=val("dp_pct", ""), today=day), "Plan saved"))
+    if pv.incomplete:
+        st.info("Not in the plan yet (add APR and minimum): " + ", ".join(f.name for f in pv.incomplete))
+    if pv.plans:
+        names = {f.id: f.name for f in pv.complete}
+        rows = []
+        for label, p in (("🏔️ Avalanche", pv.plans["avalanche"]), ("⛄ Snowball", pv.plans["snowball"]),
+                         ("Minimums only", pv.baseline)):
+            d_ = p.debt_free(day)
+            first = (names[p.sequence[0]] + f" (month {p.payoff_month[p.sequence[0]]})") if p.sequence else "-"
+            rows.append({"Plan": label, "Debt-free": f"{d_:%b %Y}" if d_ else "never", "Months": p.months or "-",
+                         "Total interest": M.fmt(p.total_interest), "First payoff": first})
+        st.dataframe(rows, hide_index=True, use_container_width=True)
+        if chosen and chosen.sequence:
+            st.markdown("**Payoff order:** " + " → ".join(
+                f"{names[k]} ({DE.add_months(day, chosen.payoff_month[k]):%b %Y})" for k in chosen.sequence))
+        st.caption(f"Monthly budget {M.fmt(pv.budget)} = minimums + {M.fmt(pv.extra)} extra (micro-payments included). "
+                   "Assumes no new charges and that you keep paying at least today's minimum. Interest monthly at APR/12.")
+        micro = DP.setting(s, "micro_amount")
+        if micro and pv.target and pv.target.apr is not None:
+            r = DE.micro_compare(M.remaining(pv.target), pv.target.apr, pv.target.min_payment, D_(micro),
+                                 int(DP.setting(s, "micro_every")))
+            with st.expander(f"☕ Honest micro-payment math on {pv.target.name}"):
+                st.markdown(
+                    f"- Minimums only: **{r.minimum_only[0] or 'never'} months**, {M.fmt(r.minimum_only[1])} interest\n"
+                    f"- Same {M.fmt(r.extra_per_month)}/month extra, paid once a month: **{r.monthly_lump[0]} months**, "
+                    f"{M.fmt(r.monthly_lump[1])} interest\n"
+                    f"- Paid as {M.fmt(D_(micro))} every {DP.setting(s, 'micro_every')} days: **{r.micro[0]} months**, "
+                    f"{M.fmt(r.micro[1])} interest\n\n"
+                    f"Paying **more** saves {M.fmt(r.saved_by_paying_more)}. Paying **more often** saves another "
+                    f"{M.fmt(r.saved_by_paying_often)} (lower average daily balance). The habit is what makes the extra happen.")
+        code = M.get_setting(s, "debt.goal_code")
+        if code:
+            st.caption(f"🎯 Goal **{code} Debt-free** is on your Plan and Timeline.")
+        elif chosen and chosen.months:
+            st.button(f"🎯 Make 'Debt-free by {chosen.debt_free(day):%b %Y}' a goal", key="dp_goal", on_click=act_warn,
+                      args=(lambda s: DP.make_goal(s, day), "Goal created - it now counts down on Plan and Timeline"))
+    with st.expander("📚 Why these plays"):
+        st.markdown("- **Avalanche** pays the least interest. **Snowball** gives faster first wins, and research shows "
+                    "many people stick with it better (Amar et al., 2011; Gathergood et al., 2019 - both in the "
+                    "University library, OWN101 unit 2).\n"
+                    "- **Autopay the minimum** so a busy week never becomes a late fee or a penalty APR.\n"
+                    "- **Micro-payments** turn spare change into a habit; the extra money is what shortens the payoff.\n"
+                    "- **Payday rule** decides before the money arrives, when willpower isn't needed.\n"
+                    "- **Statement check** keeps the balance real - interest is included, not guessed.")
+
+
 def page_money() -> None:
     st.title("💰 Money")
     st.caption("Track what you set aside, pay down and spend. LIFE OS tracks money - it never moves it, so record "
@@ -746,7 +877,9 @@ def page_money() -> None:
         got_paid()
     with t3.expander("⚙️ Settings"):
         money_settings()
-    tabs = st.tabs(list(M.SPACES.values()))
+    tabs = st.tabs(list(M.SPACES.values()) + ["🎯 Debt playbook"])
+    with tabs[-1]:
+        debt_playbook()
     for tab, space in zip(tabs, M.SPACES):
         with tab:
             funds = M.funds_in(s, space)
@@ -2353,6 +2486,13 @@ def page_today() -> None:
     _due = len(UNI.due_cards(s, day, _m, _low))
     if _due:
         st.caption(f"🧠 {_due} flashcard(s) due · ~{max(1, _due * LRN.SECONDS_PER_CARD // 60)} min - University → Review")
+    for _d in DP.due_status(s, day):
+        st.caption(f"💳 **{_d.fund.name}**: " + ("no payment for the last due date - pay the minimum now" if _d.missed
+                   else f"minimum due {'today' if _d.days == 0 else f'in {_d.days} day(s)'}") + " - Money → Debt playbook")
+    if DP.micro_due(s, day) and DP.plan(s).target:
+        _t = DP.plan(s).target
+        st.button(f"☕ Micro-pay {M.fmt(D_(DP.setting(s, 'micro_amount')))} → {_t.name}", key="td_micro",
+                  on_click=act, args=(lambda s: DP.micro_pay(s, day), "Micro-payment logged ☕"))
     _ag = ST.due(s, day)
     if _ag:
         bits = [f"🎬 shoot {len(_ag.shoots)}" if _ag.shoots else "", f"📤 post {len(_ag.posts)}" if _ag.posts else "",

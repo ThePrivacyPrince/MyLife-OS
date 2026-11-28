@@ -32,6 +32,10 @@ ADDITIVE_COLUMNS = [
     ("recurring_templates", "key_result_id", "INTEGER REFERENCES key_results(id)"),
     ("acquisition_candidates", "market_value", "VARCHAR(40)"),
     ("acquisition_candidates", "cash_ready", "BOOLEAN DEFAULT 0"),
+    ("funds", "apr", "VARCHAR(40)"),
+    ("funds", "min_payment", "VARCHAR(40)"),
+    ("funds", "due_day", "INTEGER"),
+    ("funds", "autopay", "BOOLEAN DEFAULT 0"),
 ]
 
 

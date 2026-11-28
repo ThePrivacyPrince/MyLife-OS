@@ -408,6 +408,11 @@ class Fund(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(12), default="active")   # active | done | dropped
     paid_price: Mapped[Decimal | None] = mapped_column(DecimalText)     # what a want actually cost
+    # debt terms (Debt playbook) - unknown stays None
+    apr: Mapped[Decimal | None] = mapped_column(DecimalText)            # percent, e.g. 24.99
+    min_payment: Mapped[Decimal | None] = mapped_column(DecimalText)
+    due_day: Mapped[int | None] = mapped_column(Integer)                # day of month the minimum is due
+    autopay: Mapped[bool] = mapped_column(Boolean, default=False)       # minimum on autopay
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     closed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
 
